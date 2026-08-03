@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import UserNotifications
 
 struct PeripheralDevice: Identifiable {
     let id: String
@@ -7,14 +8,17 @@ struct PeripheralDevice: Identifiable {
     let batteryPercent: Int
 }
 
-/// Reads battery levels for Bluetooth accessories (AirPods, Magic Mouse/Keyboard/
-/// Trackpad, and anything else exposing the standard HID battery property) via
-/// the same IOKit service macOS itself uses to drive the Bluetooth menu's battery
-/// icons — no IOBluetooth pairing/authorization dance required.
+/// Reads battery levels for Bluetooth accessories (AirPods, Beats, Magic Mouse/
+/// Keyboard/Trackpad, and anything else exposing the standard HID battery
+/// property) via the same IOKit service macOS itself uses to drive the
+/// Bluetooth menu's battery icons — no IOBluetooth pairing/authorization dance
+/// required. Also fires low-battery / fully-charged alerts per device.
 @MainActor
 final class PeripheralsMonitor: ObservableObject {
     @Published private(set) var devices: [PeripheralDevice] = []
 
+    private var lowBatteryFired: Set<String> = []
+    private var fullyChargedFired: Set<String> = []
     private var timer: Timer?
 
     init() {
@@ -25,7 +29,53 @@ final class PeripheralsMonitor: ObservableObject {
     }
 
     func refresh() {
-        devices = Self.scanHIDBatteryDevices()
+        let updated = Self.scanHIDBatteryDevices()
+        for device in updated {
+            evaluateAlerts(for: device)
+        }
+        devices = updated
+    }
+
+    private func evaluateAlerts(for device: PeripheralDevice) {
+        if device.batteryPercent <= 20 {
+            if !lowBatteryFired.contains(device.id) {
+                notify(
+                    identifier: "lit.device.low.\(device.id)",
+                    title: "\(device.name) Low Battery",
+                    body: "\(device.batteryPercent)% remaining."
+                )
+                lowBatteryFired.insert(device.id)
+            }
+        } else if device.batteryPercent > 30 {
+            lowBatteryFired.remove(device.id)
+        }
+
+        if device.batteryPercent >= 100 {
+            if !fullyChargedFired.contains(device.id) {
+                notify(
+                    identifier: "lit.device.full.\(device.id)",
+                    title: "\(device.name) Fully Charged",
+                    body: "Ready to go."
+                )
+                fullyChargedFired.insert(device.id)
+            }
+        } else {
+            fullyChargedFired.remove(device.id)
+        }
+    }
+
+    private func notify(identifier: String, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "\(identifier).\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     private static func scanHIDBatteryDevices() -> [PeripheralDevice] {

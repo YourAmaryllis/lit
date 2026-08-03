@@ -1,61 +1,165 @@
-const coreFeatures = [
+import {
+  Bell,
+  HeartPulse,
+  Bluetooth,
+  BatteryCharging,
+  BarChart3,
+  LayoutGrid,
+  Coffee,
+  ShieldCheck,
+  Focus,
+  Presentation,
+  Calendar,
+  Smartphone,
+  type LucideIcon,
+} from "lucide-react";
+
+const GITHUB_URL = "https://github.com/YourAmaryllis/lit";
+
+type Feature = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+};
+
+const shippedFeatures: Feature[] = [
   {
+    icon: Bell,
     title: "Custom battery alerts",
     description:
-      "Get notified at any percentage — 3%, 20%, 80%, whatever matters to you — with a native-style alert instead of macOS's default pop-up.",
+      "Add any threshold — 3%, 20%, whatever matters to you — and get a real macOS notification the moment you cross it while unplugged.",
   },
   {
+    icon: HeartPulse,
     title: "Battery health tracking",
     description:
-      "Live health percentage, cycle count, and temperature, plus a heads-up before your battery needs service.",
+      "Live health percentage, cycle count, and temperature, read straight from the same data macOS itself uses.",
   },
   {
-    title: "Device monitoring",
+    icon: Bluetooth,
+    title: "Bluetooth device battery",
     description:
-      "AirPods, iPhone, iPad, Magic Mouse, keyboard, trackpad — every connected device's battery in one place.",
+      "AirPods, Beats, Magic Mouse, keyboard, trackpad — anything reporting standard HID battery, listed with color-coded levels.",
   },
   {
-    title: "Charging protection",
+    icon: BatteryCharging,
+    title: "Lifecycle alerts",
     description:
-      "Keep your battery in a healthy 50–80% band, or top up to 100% with one tap when you need the range.",
+      "Notified when you plug in, unplug, and when you hit 80% while charging — the cue to unplug for long-term battery health.",
   },
   {
-    title: "Energy insights",
+    icon: LayoutGrid,
+    title: "Themeable menu bar icon",
     description:
-      "See which apps are draining your battery right now, and look back over the last 24 hours, 7 days, or 30 days.",
+      "Icon + percentage, percentage only, or icon only — an iPhone-style battery glyph that color-codes itself as it drains.",
   },
   {
-    title: "Lives in the menu bar",
+    icon: BarChart3,
+    title: "Native & fast",
     description:
-      "An iPhone-style battery icon that stays out of your way — under 0.1% CPU, everything processed locally.",
+      "Real Swift, not Electron. Idles at roughly 0% CPU. Everything is computed on-device — nothing leaves your Mac.",
   },
 ];
 
-const newFeatures = [
+const roadmapFeatures: Feature[] = [
   {
-    title: "Predictive alerts",
+    icon: BatteryCharging,
+    title: "Charge limiting / healthy band",
     description:
-      "\"You'll be under 20% by the end of your 2pm meeting\" — lit reads your calendar so you're never caught out mid-call.",
+      "Cap charging at 50–80% to slow long-term degradation. Needs a privileged helper to write SMC charge-control keys, so it's a bigger, careful build.",
   },
   {
-    title: "Smart charging schedule",
+    icon: BarChart3,
+    title: "Per-app energy insights",
     description:
-      "lit learns your routine and only enforces the healthy charge band when it won't get in the way of your day.",
+      "See which apps are draining your battery right now, with 24h/7d/30d history. Likely needs the private IOReport framework — under investigation.",
   },
   {
-    title: "Long-term health trends",
+    icon: Smartphone,
+    title: "iPhone / iPad battery health",
     description:
-      "Track degradation over months or years, and export a report — handy for warranty claims or resale.",
+      "Plug in your phone or tablet and see its health, cycle count, and temperature too, no extra app required.",
   },
   {
-    title: "Any Bluetooth device",
+    icon: Calendar,
+    title: "Predictive, calendar-aware alerts",
     description:
-      "Generic battery-service support means new peripherals just work, not just the devices on a hardcoded list.",
+      "\"You'll be under 20% by the end of your 2pm meeting\" — reading your calendar so you're never caught out mid-call.",
   },
 ];
 
-// TODO: replace with the real GitHub repo URL once it's published.
-const GITHUB_URL = "https://github.com/REPLACE_ME/lit";
+const useCases = [
+  {
+    icon: Coffee,
+    title: "Working from a cafe with no outlet",
+    description:
+      "Set alerts at 10% and 5% so you know exactly how much runway you have left before you need to wrap up.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Keeping your battery healthy",
+    description:
+      "An 80% alert while charging is your cue to unplug — the single habit that does the most for long-term battery lifespan.",
+  },
+  {
+    icon: Focus,
+    title: "Deep focus work",
+    description:
+      "A 20% and 15% warning gives you time to save and wrap up before the screen goes dark mid-thought.",
+  },
+  {
+    icon: Presentation,
+    title: "Presentations and client calls",
+    description:
+      "Early alerts at 25% mean you're never scrambling for an outlet mid-pitch.",
+  },
+];
+
+const faqs = [
+  {
+    question: "Is it actually free?",
+    answer:
+      "Yes — MIT licensed, no trial, no license key, no paywalled features. Build it from source or grab a signed release from GitHub.",
+  },
+  {
+    question: "Does it collect any data?",
+    answer:
+      "No. Battery and device readings are computed on-device and never leave your Mac. There's no account, no analytics, no cloud sync.",
+  },
+  {
+    question: "What macOS versions does it support?",
+    answer: "macOS 14 and later, on both Apple Silicon and Intel.",
+  },
+  {
+    question: "How is this different from the built-in battery menu?",
+    answer:
+      "Custom alert thresholds instead of one fixed low-battery warning, real health/cycle/temperature data, Bluetooth accessory battery levels in one place, and lifecycle alerts for healthier charging habits.",
+  },
+  {
+    question: "Can I trust an open source battery app with system access?",
+    answer:
+      "Every line is public on GitHub — read it, build it yourself, or audit exactly what it does before you trust it with your Mac.",
+  },
+];
+
+function FeatureCard({ feature, muted = false }: { feature: Feature; muted?: boolean }) {
+  const Icon = feature.icon;
+  return (
+    <div
+      className={`rounded-2xl border p-6 ${
+        muted
+          ? "border-black/10 bg-black/[.02] dark:border-white/10 dark:bg-white/[.03]"
+          : "border-black/10 dark:border-white/10"
+      }`}
+    >
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground/[.06] dark:bg-foreground/[.1]">
+        <Icon className="h-4.5 w-4.5" strokeWidth={1.75} />
+      </div>
+      <h3 className="mt-4 font-medium">{feature.title}</h3>
+      <p className="mt-2 text-sm text-foreground/70">{feature.description}</p>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
@@ -98,41 +202,62 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="mx-auto w-full max-w-3xl px-6 pb-16 text-center sm:pb-20">
+        <p className="text-balance text-lg text-foreground/60 sm:text-xl">
+          macOS gives you <span className="text-foreground">one</span>{" "}
+          low-battery warning, no health data, and no idea what&rsquo;s
+          connected to your Mac or how much charge it has left. lit is the
+          menu bar app that actually tells you what&rsquo;s going on.
+        </p>
+      </section>
+
       <section id="features" className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-20">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Everything your Mac&rsquo;s battery menu should&rsquo;ve had
         </h2>
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {coreFeatures.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-2xl border border-black/10 p-6 dark:border-white/10"
-            >
-              <h3 className="font-medium">{feature.title}</h3>
-              <p className="mt-2 text-sm text-foreground/70">
-                {feature.description}
-              </p>
-            </div>
+          {shippedFeatures.map((feature) => (
+            <FeatureCard key={feature.title} feature={feature} />
           ))}
         </div>
       </section>
 
       <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-20">
         <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          New in lit
+          On the roadmap
+        </h2>
+        <p className="mt-2 text-sm text-foreground/60">
+          Being upfront: these aren&rsquo;t built yet. They&rsquo;re the harder,
+          system-level pieces we&rsquo;re working through in the open.
+        </p>
+        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {roadmapFeatures.map((feature) => (
+            <FeatureCard key={feature.title} feature={feature} muted />
+          ))}
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-5xl px-6 py-16 sm:py-20">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Built for how you actually work
         </h2>
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {newFeatures.map((feature) => (
-            <div
-              key={feature.title}
-              className="rounded-2xl bg-black/[.03] p-6 dark:bg-white/[.05]"
-            >
-              <h3 className="font-medium">{feature.title}</h3>
-              <p className="mt-2 text-sm text-foreground/70">
-                {feature.description}
-              </p>
-            </div>
-          ))}
+          {useCases.map((useCase) => {
+            const Icon = useCase.icon;
+            return (
+              <div key={useCase.title} className="flex gap-4">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-foreground/[.06] dark:bg-foreground/[.1]">
+                  <Icon className="h-4.5 w-4.5" strokeWidth={1.75} />
+                </div>
+                <div>
+                  <h3 className="font-medium">{useCase.title}</h3>
+                  <p className="mt-1 text-sm text-foreground/70">
+                    {useCase.description}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -165,6 +290,20 @@ export default function Home() {
               Latest release
             </a>
           </div>
+        </div>
+      </section>
+
+      <section className="mx-auto w-full max-w-3xl px-6 py-16 sm:py-20">
+        <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+          Questions? We&rsquo;ve got answers.
+        </h2>
+        <div className="mt-8 divide-y divide-black/10 dark:divide-white/10">
+          {faqs.map((faq) => (
+            <div key={faq.question} className="py-5">
+              <h3 className="font-medium">{faq.question}</h3>
+              <p className="mt-2 text-sm text-foreground/70">{faq.answer}</p>
+            </div>
+          ))}
         </div>
       </section>
 

@@ -14,8 +14,8 @@ final class BatteryMonitor: ObservableObject {
     @Published var maxCapacity: Int?
     @Published var temperatureCelsius: Double?
 
-    /// Invoked after every refresh with the latest percentage and plugged-in state.
-    var onUpdate: ((_ percentage: Int, _ isPluggedIn: Bool) -> Void)?
+    /// Invoked after every refresh with the latest percentage, plugged-in, and charging state.
+    var onUpdate: ((_ percentage: Int, _ isPluggedIn: Bool, _ isCharging: Bool) -> Void)?
 
     private var timer: Timer?
 
@@ -31,15 +31,10 @@ final class BatteryMonitor: ObservableObject {
         return Int((Double(max) / Double(design)) * 100.0)
     }
 
-    var menuBarLabel: String {
-        let bolt = isPluggedIn ? "⚡︎" : ""
-        return "\(percentage)%\(bolt)"
-    }
-
     func refresh() {
         refreshPowerSource()
         refreshSmartBatteryProperties()
-        onUpdate?(percentage, isPluggedIn)
+        onUpdate?(percentage, isPluggedIn, isCharging)
     }
 
     private func refreshPowerSource() {
