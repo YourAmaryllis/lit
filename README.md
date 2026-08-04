@@ -6,6 +6,8 @@ plus a few ideas of its own.
 
 No account, no subscription, no telemetry. Everything runs locally.
 
+![lit menu bar dropdown showing battery, power, capacity, temperature, and app energy usage](assets/dashboard.png)
+
 ## Features
 
 - **Menu bar glyph** — live percentage, color-coded SF Symbols battery icon,
