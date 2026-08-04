@@ -9,6 +9,7 @@ Repo: https://github.com/YourAmaryllis/lit
 - `mac-app/` — Swift Package (SwiftUI `MenuBarExtra`) menu bar app.
   - **`swift run` no longer works standalone** — `UNUserNotificationCenter` crashes hard (`bundleProxyForCurrentProcess is nil`) without a real app bundle, now that alerts exist.
   - Build + package: `./Scripts/build-app.sh [debug|release]` → produces `.build/Lit.app`, ad-hoc codesigned.
+  - **[`DATA_SOURCES.md`](mac-app/DATA_SOURCES.md)** — exactly which API/IOKit key backs every number shown in the app, public vs. private, and how each was verified. Read this before touching `BatteryMonitor`, `PeripheralsMonitor`, or `EnergyMonitor`.
 - `site/` — Next.js 16 marketing/landing site. Run with `npm run dev` from inside `site/`.
 
 ## Architecture: rich native dropdown + local web dashboard
