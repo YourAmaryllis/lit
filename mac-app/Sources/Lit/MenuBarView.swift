@@ -146,26 +146,44 @@ struct MenuBarView: View {
     private var powerFlow: some View {
         let watts = battery.batteryWattage ?? 0
         let flowing = abs(watts) > 0.05
+        // While actively charging, show a 3-way split: adapter -> battery (the
+        // prominent middle number, real) -> Mac (right node, estimated).
+        // Otherwise it's just adapter<->battery or battery<->Mac, both real.
+        let isChargingFlow = battery.isPluggedIn && battery.isCharging
+
         let leftSymbol = battery.isPluggedIn ? "powerplug.fill" : BatteryIcon.symbolName(forPercentage: battery.percentage)
         let leftLabel = battery.isPluggedIn ? "Adapter" : "Battery"
         let leftCaption = battery.isPluggedIn ? battery.adapterWattage.map { "\($0)W" } : nil
-        let rightSymbol = battery.isPluggedIn ? BatteryIcon.symbolName(forPercentage: battery.percentage) : "laptopcomputer"
-        let rightLabel = battery.isPluggedIn ? "Battery" : "Mac"
 
-        return HStack(spacing: 8) {
-            flowNode(symbol: leftSymbol, label: leftLabel, caption: leftCaption)
-            VStack(spacing: 2) {
-                Text(flowing ? String(format: "%.1f W", abs(watts)) : "Idle")
-                    .font(.system(size: 14, weight: .bold))
-                Text(flowCaption)
+        let rightSymbol = isChargingFlow || !battery.isPluggedIn
+            ? "laptopcomputer"
+            : BatteryIcon.symbolName(forPercentage: battery.percentage)
+        let rightLabel = isChargingFlow || !battery.isPluggedIn ? "Mac" : "Battery"
+        let rightCaption = isChargingFlow
+            ? battery.estimatedSystemWattageWhileCharging.map { String(format: "~%.0fW", $0) }
+            : nil
+
+        return VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                flowNode(symbol: leftSymbol, label: leftLabel, caption: leftCaption)
+                VStack(spacing: 2) {
+                    Text(flowing ? String(format: "%.1f W", abs(watts)) : "Idle")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(flowCaption)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
+                flowNode(symbol: rightSymbol, label: rightLabel, caption: rightCaption)
+            }
+            if rightCaption != nil {
+                Text("Mac power is estimated (adapter rating minus battery draw) — only accurate when the adapter is near its limit.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
-            flowNode(symbol: rightSymbol, label: rightLabel, caption: nil)
         }
     }
 
@@ -182,7 +200,7 @@ struct MenuBarView: View {
 
     private var flowCaption: String {
         if battery.isFullyCharged { return "Battery full" }
-        if battery.isCharging { return "Charging" }
+        if battery.isCharging { return "To battery" }
         if !battery.isPluggedIn { return "Discharging" }
         return "Idle"
     }

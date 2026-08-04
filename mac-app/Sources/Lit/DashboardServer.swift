@@ -142,6 +142,7 @@ final class DashboardServer {
                 "amperageMilliamps": battery.amperageMilliamps,
                 "wattage": battery.batteryWattage,
                 "adapterWattage": battery.adapterWattage,
+                "estimatedSystemWattage": battery.estimatedSystemWattageWhileCharging,
             ] as [String: Any?],
             "lastHealthUpdate": battery.lastHealthUpdate.map { $0.timeIntervalSince1970 },
             "devices": peripherals.devices.map {

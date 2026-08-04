@@ -74,6 +74,20 @@ final class BatteryMonitor: ObservableObject {
         return voltage * (Double(amperage) / 1000.0)
     }
 
+    /// Estimated system power draw while actively charging: the adapter's rated
+    /// wattage minus what's measurably going into the battery. This is only a
+    /// real number when the Mac is drawing the adapter's full rated capacity —
+    /// true for small/low-wattage adapters running at their limit, false for a
+    /// high-wattage adapter under light load (it would overstate system draw by
+    /// the unused headroom). There's no public API for true live input power,
+    /// so this is the best available estimate, not an independent measurement.
+    var estimatedSystemWattageWhileCharging: Double? {
+        guard isCharging, let adapterW = adapterWattage, let batteryW = batteryWattage, batteryW > 0 else {
+            return nil
+        }
+        return max(0, Double(adapterW) - batteryW)
+    }
+
     func refresh() {
         refreshPowerSource()
         refreshElectrical()
