@@ -200,12 +200,23 @@ keeps running after the call returns — standard `adb` behavior, not a bug
 in this app, but a real background process that will show up in Activity
 Monitor once Android detection has run at least once.
 
-**Status: structurally verified, not yet tested against real hardware.**
-The "adb not installed" and "no device attached" paths are confirmed
-clean — no crash, no error, matches the same graceful pattern already
-verified for the iOS path. The actual battery-reading path (real device,
-USB debugging enabled and authorized) has not been tested — no Android
-device with debugging enabled was available during development.
+**Status: verified against real hardware.** Tested end-to-end with a real
+Samsung device (SM-F966U) connected via USB with debugging enabled: `adb
+devices -l` returned an authorized serial, and `dumpsys battery` returned
+real data — `level: 56`, `status: 2`, `USB powered: true`. Samsung's
+`dumpsys battery` output is dramatically more verbose than stock Android
+(hundreds of lines of vendor-specific battery-history logging), which was
+a useful stress test for the parser: the extra lines use `key:value` (no
+space) or multi-key comma-separated formats that don't match the `Key:
+Value` (colon-space) pattern being parsed, so they're correctly ignored
+without any special-casing needed. Confirmed the app picked it up
+correctly — `{"name":"SM-F966U","batteryPercent":56,"isCharging":true,
+"symbolOverride":"candybarphone"}` via the dashboard API, matching the raw
+tool output exactly, and rendered correctly in the web dashboard (📱 icon +
+name + charging bolt + bar). App remained stable throughout, no crashes,
+no errors, despite the unusually large `dumpsys` output. The "adb not
+installed"/"no device attached" paths were verified separately beforehand
+and remain correct.
 
 ## 7. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
 
