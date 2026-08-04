@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>lit</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0a0a0a;
+    --card: #141414;
+    --border: rgba(255,255,255,0.09);
+    --text: #f2f2f2;
+    --text-dim: rgba(242,242,242,0.6);
+    --text-faint: rgba(242,242,242,0.38);
+    --accent: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --track: rgba(255,255,255,0.08);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f7;
+      --card: #ffffff;
+      --border: rgba(0,0,0,0.08);
+      --text: #171717;
+      --text-dim: rgba(23,23,23,0.6);
+      --text-faint: rgba(23,23,23,0.4);
+      --track: rgba(0,0,0,0.07);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 24px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 24px; }
+  header .word { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  header .updated { font-size: 12px; color: var(--text-faint); }
+
+  .grid { display: grid; gap: 16px; }
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 22px;
+  }
+  .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    margin: 0 0 16px;
+  }
+
+  .hero { display: flex; align-items: center; gap: 28px; margin-bottom: 16px; }
+  .gauge {
+    position: relative;
+    width: 128px; height: 128px; border-radius: 50%;
+    flex-shrink: 0;
+    background: conic-gradient(var(--accent) calc(var(--pct, 0) * 1%), var(--track) 0);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .gauge::before {
+    content: "";
+    position: absolute; inset: 9px;
+    border-radius: 50%;
+    background: var(--card);
+  }
+  .gauge .pct { position: relative; font-size: 28px; font-weight: 700; }
+  .hero-info { flex: 1; }
+  .hero-info .status { font-size: 18px; font-weight: 600; }
+  .hero-info .sub { margin-top: 4px; font-size: 14px; color: var(--text-dim); }
+
+  .stat-row { display: flex; justify-content: space-between; padding: 7px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-row .label { color: var(--text-dim); }
+  .stat-row .value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .badge.good { background: rgba(52,211,153,0.15); color: var(--accent); }
+  .badge.fair { background: rgba(251,191,36,0.15); color: var(--warn); }
+  .badge.poor { background: rgba(248,113,113,0.15); color: var(--danger); }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  .flow { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  .flow-node { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 64px; flex-shrink: 0; }
+  .flow-node .icon { font-size: 26px; }
+  .flow-node .label { font-size: 11px; color: var(--text-dim); }
+  .flow-track { flex: 1; height: 6px; border-radius: 999px; background: var(--track); overflow: hidden; position: relative; }
+  .flow-track .stripe {
+    position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, var(--accent) 0 10px, transparent 10px 20px);
+    background-size: 40px 100%;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .flow-track.active .stripe { opacity: 0.9; animation: flow 0.7s linear infinite; }
+  @keyframes flow { from { background-position: 0 0; } to { background-position: -40px 0; } }
+  .flow-watts { text-align: center; font-size: 13px; color: var(--text-dim); margin-bottom: 18px; }
+  .flow-watts strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  .capacity-bar { position: relative; height: 10px; border-radius: 999px; background: var(--track); margin-top: 6px; overflow: hidden; }
+  .capacity-bar .fill-full { position: absolute; inset: 0; background: var(--track); border-right: 2px solid var(--text-faint); }
+  .capacity-bar .fill-remaining { position: absolute; inset: 0; background: var(--accent); border-radius: 999px 0 0 999px; }
+  .capacity-legend { display: flex; justify-content: space-between; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+  .capacity-legend .value { color: var(--text); font-weight: 600; }
+
+  .list-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+  .list-row .name { flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .list-row .bar { width: 90px; height: 5px; border-radius: 999px; background: var(--track); overflow: hidden; }
+  .list-row .bar-fill { height: 100%; background: var(--accent); }
+  .list-row .num { width: 38px; text-align: right; font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .empty { font-size: 13px; color: var(--text-faint); padding: 4px 0; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .chip { display: flex; align-items: center; gap: 6px; background: var(--track); border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 13px; }
+  .chip button { all: unset; cursor: pointer; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-faint); font-size: 13px; line-height: 1; }
+  .chip button:hover { background: rgba(255,255,255,0.12); color: var(--text); }
+  .add-row { display: flex; gap: 8px; }
+  input[type="number"], select {
+    background: var(--track); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  }
+  input[type="number"] { width: 70px; }
+  button.primary {
+    all: unset; cursor: pointer; background: var(--accent); color: #06281d;
+    padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  }
+  button.primary:hover { opacity: 0.9; }
+
+  footer { text-align: center; margin-top: 32px; font-size: 12px; color: var(--text-faint); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="word">lit</span>
+    <span class="updated" id="updated">—</span>
+  </header>
+
+  <div class="card hero">
+    <div class="gauge" id="gauge"><span class="pct" id="pct">—</span></div>
+    <div class="hero-info">
+      <div class="status" id="status">—</div>
+      <div class="sub" id="sub">—</div>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:16px;">
+    <div class="card">
+      <h2>Battery Information</h2>
+      <div class="stat-row"><span class="label">Health</span><span class="value"><span id="health-badge"></span></span></div>
+      <div class="stat-row"><span class="label">Cycle Count</span><span class="value" id="cycles">—</span></div>
+      <div class="stat-row"><span class="label">Temperature</span><span class="value" id="temp">—</span></div>
+      <div class="stat-row"><span class="label">Operating Range</span><span class="value" id="temp-normal">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Power &amp; Electrical</h2>
+      <div class="flow">
+        <div class="flow-node"><div class="icon" id="flow-left-icon">🔌</div><div class="label" id="flow-left-label">Adapter</div></div>
+        <div class="flow-track" id="flow-track"><div class="stripe"></div></div>
+        <div class="flow-node"><div class="icon" id="flow-right-icon">🔋</div><div class="label" id="flow-right-label">Battery</div></div>
+      </div>
+      <div class="flow-watts" id="flow-watts">—</div>
+      <div class="stat-row"><span class="label">Voltage</span><span class="value" id="voltage">—</span></div>
+      <div class="stat-row"><span class="label">Current</span><span class="value" id="amperage">—</span></div>
+      <div class="stat-row"><span class="label">Adapter</span><span class="value" id="adapter">—</span></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Capacity Details</h2>
+    <div class="capacity-bar">
+      <div class="fill-full" id="cap-full-fill"></div>
+      <div class="fill-remaining" id="cap-remaining-fill"></div>
+    </div>
+    <div class="capacity-legend">
+      <span>Remaining <span class="value" id="cap-remaining">—</span></span>
+      <span>Full Capacity <span class="value" id="cap-full">—</span></span>
+      <span>Design Capacity <span class="value" id="cap-design">—</span></span>
+    </div>
+  </div>
+
+  <div class="grid grid-2" style="margin-top:16px;">
+    <div class="card">
+      <h2>Devices</h2>
+      <div id="devices"><div class="empty">No Bluetooth accessories detected.</div></div>
+    </div>
+
+    <div class="card">
+      <h2>Apps Using Significant Energy</h2>
+      <div id="energy"><div class="empty">Sampling…</div></div>
+      <div class="empty" style="margin-top:8px;">CPU-based estimate, normalized by core count — not a true joules measurement.</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Alert Thresholds</h2>
+    <div class="chips" id="threshold-chips"></div>
+    <div class="add-row">
+      <input type="number" id="threshold-input" min="1" max="99" placeholder="%" />
+      <button class="primary" id="threshold-add">Add</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h2>Menu Bar Icon</h2>
+    <select id="icon-style">
+      <option value="iconAndPercentage">Icon + Percentage</option>
+      <option value="percentageOnly">Percentage Only</option>
+      <option value="iconOnly">Icon Only</option>
+    </select>
+  </div>
+
+  <footer>lit — refreshes every 2 seconds · health stats every 2 minutes</footer>
+</div>
+
+<script>
+  const fmtMah = n => n == null ? '—' : n.toLocaleString() + ' mAh';
+  const fmtPct = n => n == null ? '—' : Math.round(n) + '%';
+  const fmtMinutes = m => {
+    if (m == null || m <= 0 || m === 65535) return null;
+    const h = Math.floor(m / 60), mm = m % 60;
+    return (h > 0 ? h + 'h ' : '') + mm + 'm';
+  };
+
+  async function refresh() {
+    let data;
+    try {
+      const res = await fetch('/api/status');
+      data = await res.json();
+    } catch (e) {
+      document.getElementById('updated').textContent = 'connection lost';
+      return;
+    }
+
+    document.getElementById('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
+
+    // Hero gauge
+    document.getElementById('gauge').style.setProperty('--pct', data.percentage);
+    document.getElementById('pct').textContent = data.percentage + '%';
+
+    let statusText = data.isPluggedIn ? (data.isCharging ? 'Charging' : (data.isFullyCharged ? 'Fully Charged' : 'Plugged In')) : 'On Battery';
+    document.getElementById('status').textContent = statusText;
+
+    let sub = '';
+    const toFull = fmtMinutes(data.timeToFullMinutes);
+    const toEmpty = fmtMinutes(data.timeToEmptyMinutes);
+    if (data.isCharging && toFull) sub = toFull + ' until full';
+    else if (!data.isPluggedIn && toEmpty) sub = toEmpty + ' remaining';
+    else sub = data.isFullyCharged ? 'Ready to unplug' : '';
+    document.getElementById('sub').textContent = sub;
+
+    // Battery info
+    const health = data.health || {};
+    const badge = document.getElementById('health-badge');
+    if (health.percentage != null) {
+      const cls = (health.condition || 'Good').toLowerCase();
+      badge.innerHTML = `<span class="badge ${cls}"><span class="dot"></span>${health.percentage}% · ${health.condition}</span>`;
+    } else {
+      badge.textContent = '—';
+    }
+    document.getElementById('cycles').textContent = health.cycleCount ?? '—';
+    document.getElementById('temp').textContent = health.temperatureCelsius != null
+      ? `${health.temperatureCelsius.toFixed(1)}°C / ${health.temperatureFahrenheit.toFixed(1)}°F` : '—';
+    document.getElementById('temp-normal').textContent = health.temperatureNormal == null ? '—' : (health.temperatureNormal ? 'Normal' : 'Out of range');
+
+    // Power & electrical
+    const elec = data.electrical || {};
+    document.getElementById('voltage').textContent = elec.voltage != null ? elec.voltage.toFixed(2) + ' V' : '—';
+    document.getElementById('amperage').textContent = elec.amperageMilliamps != null ? elec.amperageMilliamps + ' mA' : '—';
+    document.getElementById('adapter').textContent = elec.adapterWattage != null ? elec.adapterWattage + ' W connected' : 'Not connected';
+
+    const track = document.getElementById('flow-track');
+    const watts = elec.wattage;
+    const leftIcon = document.getElementById('flow-left-icon');
+    const leftLabel = document.getElementById('flow-left-label');
+    const rightIcon = document.getElementById('flow-right-icon');
+    const rightLabel = document.getElementById('flow-right-label');
+    const wattsLabel = document.getElementById('flow-watts');
+
+    if (data.isPluggedIn) {
+      leftIcon.textContent = '🔌'; leftLabel.textContent = 'Adapter';
+      rightIcon.textContent = '🔋'; rightLabel.textContent = 'Battery';
+    } else {
+      leftIcon.textContent = '🔋'; leftLabel.textContent = 'Battery';
+      rightIcon.textContent = '💻'; rightLabel.textContent = 'Mac';
+    }
+
+    const flowing = watts != null && Math.abs(watts) > 0.05;
+    track.classList.toggle('active', flowing);
+    wattsLabel.innerHTML = flowing
+      ? `<strong>${Math.abs(watts).toFixed(1)} W</strong> ${data.isPluggedIn ? 'charging' : 'discharging'}`
+      : (data.isFullyCharged ? 'Fully charged — no flow' : 'Idle');
+
+    // Capacity
+    const cap = data.capacity || {};
+    document.getElementById('cap-remaining').textContent = fmtMah(cap.remainingMah);
+    document.getElementById('cap-full').textContent = fmtMah(cap.fullMah);
+    document.getElementById('cap-design').textContent = fmtMah(cap.designMah);
+    if (cap.designMah) {
+      const fullPct = Math.min(100, (cap.fullMah / cap.designMah) * 100);
+      const remPct = Math.min(100, (cap.remainingMah / cap.designMah) * 100);
+      document.getElementById('cap-full-fill').style.width = fullPct + '%';
+      document.getElementById('cap-remaining-fill').style.width = remPct + '%';
+    }
+
+    // Devices
+    const devicesEl = document.getElementById('devices');
+    if ((data.devices || []).length === 0) {
+      devicesEl.innerHTML = '<div class="empty">No Bluetooth accessories detected.</div>';
+    } else {
+      devicesEl.innerHTML = data.devices.map(d => `
+        <div class="list-row">
+          <span class="name">${escapeHtml(d.name)}</span>
+          <span class="bar"><span class="bar-fill" style="width:${d.batteryPercent}%"></span></span>
+          <span class="num">${d.batteryPercent}%</span>
+        </div>`).join('');
+    }
+
+    // Energy
+    const energyEl = document.getElementById('energy');
+    const apps = (data.energy || []).filter(a => a.percent > 0.05).slice(0, 6);
+    if (apps.length === 0) {
+      energyEl.innerHTML = '<div class="empty">Nothing using significant CPU right now.</div>';
+    } else {
+      const max = Math.max(...apps.map(a => a.percent), 1);
+      energyEl.innerHTML = apps.map(a => `
+        <div class="list-row">
+          <span class="name">${escapeHtml(a.name)}</span>
+          <span class="bar"><span class="bar-fill" style="width:${(a.percent / max) * 100}%"></span></span>
+          <span class="num">${a.percent.toFixed(1)}%</span>
+        </div>`).join('');
+    }
+
+    // Thresholds
+    const chips = document.getElementById('threshold-chips');
+    const thresholds = (data.alerts && data.alerts.thresholds) || [];
+    chips.innerHTML = thresholds.length
+      ? thresholds.map(t => `<span class="chip">${t}%<button data-remove="${t}">×</button></span>`).join('')
+      : '<span class="empty">No thresholds set.</span>';
+    chips.querySelectorAll('button[data-remove]').forEach(btn => {
+      btn.addEventListener('click', () => postJSON('/api/thresholds/remove', { value: Number(btn.dataset.remove) }));
+    });
+
+    // Icon style select (don't fight the user while they're mid-interaction)
+    const iconSelect = document.getElementById('icon-style');
+    if (document.activeElement !== iconSelect && data.appearance) {
+      iconSelect.value = data.appearance.iconStyle;
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function postJSON(path, body) {
+    await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    refresh();
+  }
+
+  document.getElementById('threshold-add').addEventListener('click', () => {
+    const input = document.getElementById('threshold-input');
+    const value = Number(input.value);
+    if (value > 0 && value < 100) {
+      postJSON('/api/thresholds/add', { value });
+      input.value = '';
+    }
+  });
+
+  document.getElementById('icon-style').addEventListener('change', e => {
+    postJSON('/api/icon-style', { style: e.target.value });
+  });
+
+  refresh();
+  setInterval(refresh, 2000);
+</script>
+</body>
+</html>

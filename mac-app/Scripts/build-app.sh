@@ -18,6 +18,7 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp ".build/${CONFIGURATION}/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/${APP_NAME}"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+cp "Resources/dashboard.html" "$APP_BUNDLE/Contents/Resources/dashboard.html"
 
 codesign --force --deep --sign - "$APP_BUNDLE"
 

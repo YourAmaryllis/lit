@@ -1,33 +1,38 @@
 import SwiftUI
 import AppKit
 
+/// Deliberately minimal — a glance and a way out to the full dashboard, not
+/// a place to cram every stat into a 280px popover.
 struct MenuBarView: View {
     @ObservedObject var battery: BatteryMonitor
-    @ObservedObject var alerts: AlertsManager
-    @ObservedObject var peripherals: PeripheralsMonitor
-    @ObservedObject var appearance: AppearanceSettings
-    @State private var newThresholdText: String = ""
+    let dashboardURL: URL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
-
-            Divider()
-
-            statsGrid
-
-            if !peripherals.devices.isEmpty {
-                Divider()
-                devicesSection
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: BatteryIcon.symbolName(forPercentage: battery.percentage))
+                    .font(.system(size: 26))
+                    .foregroundStyle(BatteryIcon.color(forPercentage: battery.percentage, isPluggedIn: battery.isPluggedIn))
+                Text("\(battery.percentage)%")
+                    .font(.system(size: 28, weight: .semibold))
+                Spacer()
+                Text(statusLabel)
+                    .foregroundStyle(.secondary)
             }
 
             Divider()
 
-            alertsSection
-
-            Divider()
-
-            iconStylePicker
+            Button {
+                NSWorkspace.shared.open(dashboardURL)
+            } label: {
+                HStack {
+                    Image(systemName: "chart.bar.doc.horizontal")
+                    Text("Open Dashboard")
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
 
             Divider()
 
@@ -36,121 +41,7 @@ struct MenuBarView: View {
             }
         }
         .padding(16)
-        .frame(width: 280)
-    }
-
-    private var header: some View {
-        HStack {
-            Image(systemName: BatteryIcon.symbolName(forPercentage: battery.percentage))
-                .font(.system(size: 26))
-                .foregroundStyle(BatteryIcon.color(forPercentage: battery.percentage, isPluggedIn: battery.isPluggedIn))
-            Text("\(battery.percentage)%")
-                .font(.system(size: 28, weight: .semibold))
-            Spacer()
-            Text(statusLabel)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var statsGrid: some View {
-        Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 8) {
-            if let health = battery.healthPercentage {
-                GridRow {
-                    Label("Battery Health", systemImage: "heart.text.square")
-                    Text("\(health)%").fontWeight(.medium).gridColumnAlignment(.trailing)
-                }
-            }
-            if let cycles = battery.cycleCount {
-                GridRow {
-                    Label("Cycle Count", systemImage: "arrow.triangle.2.circlepath")
-                    Text("\(cycles)").fontWeight(.medium)
-                }
-            }
-            if let temp = battery.temperatureCelsius {
-                GridRow {
-                    Label("Temperature", systemImage: "thermometer.medium")
-                    Text(String(format: "%.1f\u{00B0}C", temp)).fontWeight(.medium)
-                }
-            }
-            if let minutes = remainingMinutes, minutes > 0 {
-                GridRow {
-                    Label(battery.isCharging ? "Time to Full" : "Time Remaining", systemImage: "clock")
-                    Text("\(minutes / 60)h \(minutes % 60)m").fontWeight(.medium)
-                }
-            }
-        }
-        .font(.subheadline)
-        .foregroundStyle(.primary)
-        .labelStyle(.titleAndIcon)
-    }
-
-    private var devicesSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Devices")
-            ForEach(peripherals.devices) { device in
-                HStack {
-                    Image(systemName: BatteryIcon.symbolName(forPercentage: device.batteryPercent))
-                        .foregroundStyle(BatteryIcon.color(forPercentage: device.batteryPercent, isPluggedIn: false))
-                        .frame(width: 18)
-                    Text(device.name)
-                        .lineLimit(1)
-                    Spacer()
-                    Text("\(device.batteryPercent)%")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
-            }
-        }
-    }
-
-    private var alertsSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Alert me at")
-            ForEach(alerts.thresholds, id: \.self) { threshold in
-                HStack {
-                    Text("\(threshold)%")
-                    Spacer()
-                    Button {
-                        alerts.removeThreshold(threshold)
-                    } label: {
-                        Image(systemName: "minus.circle")
-                    }
-                    .buttonStyle(.plain)
-                }
-                .font(.subheadline)
-            }
-
-            HStack {
-                TextField("%", text: $newThresholdText)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 50)
-                Button("Add") {
-                    if let value = Int(newThresholdText) {
-                        alerts.addThreshold(value)
-                    }
-                    newThresholdText = ""
-                }
-            }
-        }
-    }
-
-    private var iconStylePicker: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            sectionHeader("Menu Bar Icon")
-            Picker("", selection: $appearance.iconStyle) {
-                ForEach(MenuBarIconStyle.allCases) { style in
-                    Text(style.label).tag(style)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-        }
-    }
-
-    private func sectionHeader(_ title: String) -> some View {
-        Text(title)
-            .font(.subheadline)
-            .fontWeight(.medium)
+        .frame(width: 240)
     }
 
     private var statusLabel: String {
@@ -158,9 +49,5 @@ struct MenuBarView: View {
             return battery.isCharging ? "Charging" : "Plugged In"
         }
         return "On Battery"
-    }
-
-    private var remainingMinutes: Int? {
-        battery.isCharging ? battery.timeToFullMinutes : battery.timeToEmptyMinutes
     }
 }

@@ -2,38 +2,84 @@ import Foundation
 import IOKit
 import IOKit.ps
 
+enum HealthCondition: String {
+    case good = "Good"
+    case fair = "Fair"
+    case poor = "Poor"
+}
+
 @MainActor
 final class BatteryMonitor: ObservableObject {
     @Published var percentage: Int = 0
     @Published var isCharging: Bool = false
     @Published var isPluggedIn: Bool = false
+    @Published var isFullyCharged: Bool = false
     @Published var timeToEmptyMinutes: Int?
     @Published var timeToFullMinutes: Int?
+
+    // Health snapshot — refreshed every 2 minutes, like Juicy does, since these
+    // values barely move minute to minute and don't need live polling.
     @Published var cycleCount: Int?
-    @Published var designCapacity: Int?
-    @Published var maxCapacity: Int?
+    @Published var designCapacityMah: Int?
+    @Published var fullCapacityMah: Int?
+    @Published var remainingCapacityMah: Int?
     @Published var temperatureCelsius: Double?
 
-    /// Invoked after every refresh with the latest percentage, plugged-in, and charging state.
+    // Electrical — refreshed on every fast tick.
+    @Published var voltageVolts: Double?
+    @Published var amperageMilliamps: Int?
+    @Published var adapterWattage: Int?
+
+    /// Invoked after every fast refresh with the latest percentage, plugged-in, and charging state.
     var onUpdate: ((_ percentage: Int, _ isPluggedIn: Bool, _ isCharging: Bool) -> Void)?
 
     private var timer: Timer?
+    private var lastHealthRefresh: Date = .distantPast
+    private let healthRefreshInterval: TimeInterval = 120
 
     init() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
     }
 
     var healthPercentage: Int? {
-        guard let design = designCapacity, design > 0, let max = maxCapacity else { return nil }
-        return Int((Double(max) / Double(design)) * 100.0)
+        guard let design = designCapacityMah, design > 0, let full = fullCapacityMah else { return nil }
+        return Int((Double(full) / Double(design)) * 100.0)
+    }
+
+    var healthCondition: HealthCondition? {
+        guard let health = healthPercentage else { return nil }
+        switch health {
+        case 80...: return .good
+        case 50..<80: return .fair
+        default: return .poor
+        }
+    }
+
+    var temperatureFahrenheit: Double? {
+        temperatureCelsius.map { $0 * 9.0 / 5.0 + 32.0 }
+    }
+
+    /// Apple's documented safe operating range for these devices is 0-35°C.
+    var isTemperatureNormal: Bool? {
+        temperatureCelsius.map { $0 >= 0 && $0 <= 35 }
+    }
+
+    /// Instantaneous power flowing into (+) or out of (-) the battery, in watts.
+    var batteryWattage: Double? {
+        guard let voltage = voltageVolts, let amperage = amperageMilliamps else { return nil }
+        return voltage * (Double(amperage) / 1000.0)
     }
 
     func refresh() {
         refreshPowerSource()
-        refreshSmartBatteryProperties()
+        refreshElectrical()
+        if Date().timeIntervalSince(lastHealthRefresh) >= healthRefreshInterval {
+            refreshHealthSnapshot()
+            lastHealthRefresh = Date()
+        }
         onUpdate?(percentage, isPluggedIn, isCharging)
     }
 
@@ -51,26 +97,43 @@ final class BatteryMonitor: ObservableObject {
         timeToFullMinutes = description[kIOPSTimeToFullChargeKey] as? Int
     }
 
-    private func refreshSmartBatteryProperties() {
+    private func refreshElectrical() {
+        withSmartBatteryService { property in
+            self.voltageVolts = (property("Voltage") as? NSNumber).map { Double(truncating: $0) / 1000.0 }
+            self.amperageMilliamps = (property("InstantAmperage") as? NSNumber)?.intValue
+                ?? (property("Amperage") as? NSNumber)?.intValue
+            self.isFullyCharged = (property("FullyCharged") as? Bool) ?? self.isFullyCharged
+            if let adapter = property("AdapterDetails") as? [String: Any] {
+                self.adapterWattage = (adapter["Watts"] as? NSNumber)?.intValue
+            } else {
+                self.adapterWattage = nil
+            }
+        }
+    }
+
+    private func refreshHealthSnapshot() {
+        withSmartBatteryService { property in
+            self.cycleCount = (property("CycleCount") as? NSNumber)?.intValue
+            self.designCapacityMah = (property("DesignCapacity") as? NSNumber)?.intValue
+            // On Apple Silicon, top-level "MaxCapacity" is already a 0-100 percentage,
+            // not a mAh value comparable to DesignCapacity — "AppleRawMaxCapacity" is
+            // the real mAh figure. Older Intel Macs only expose "MaxCapacity" in mAh.
+            self.fullCapacityMah = (property("AppleRawMaxCapacity") as? NSNumber)?.intValue
+                ?? (property("MaxCapacity") as? NSNumber)?.intValue
+            self.remainingCapacityMah = (property("AppleRawCurrentCapacity") as? NSNumber)?.intValue
+            if let tempRaw = (property("Temperature") as? NSNumber)?.doubleValue {
+                self.temperatureCelsius = tempRaw / 100.0
+            }
+        }
+    }
+
+    private func withSmartBatteryService(_ body: (_ property: (String) -> Any?) -> Void) {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != 0 else { return }
         defer { IOObjectRelease(service) }
 
-        func intProperty(_ key: String) -> Int? {
-            guard let cfValue = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0) else {
-                return nil
-            }
-            return (cfValue.takeRetainedValue() as? NSNumber)?.intValue
-        }
-
-        cycleCount = intProperty("CycleCount")
-        designCapacity = intProperty("DesignCapacity")
-        // On Apple Silicon, top-level "MaxCapacity" is already a 0-100 percentage,
-        // not a mAh value comparable to DesignCapacity — "AppleRawMaxCapacity" is
-        // the real mAh figure. Older Intel Macs only expose "MaxCapacity" in mAh.
-        maxCapacity = intProperty("AppleRawMaxCapacity") ?? intProperty("MaxCapacity")
-        if let tempRaw = intProperty("Temperature") {
-            temperatureCelsius = Double(tempRaw) / 100.0
+        body { key in
+            IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
         }
     }
 }

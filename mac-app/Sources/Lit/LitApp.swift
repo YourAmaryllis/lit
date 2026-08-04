@@ -7,12 +7,7 @@ struct LitApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(
-                battery: appDelegate.battery,
-                alerts: appDelegate.alerts,
-                peripherals: appDelegate.peripherals,
-                appearance: appDelegate.appearance
-            )
+            MenuBarView(battery: appDelegate.battery, dashboardURL: appDelegate.dashboardServer.url)
         } label: {
             MenuBarLabel(battery: appDelegate.battery, appearance: appDelegate.appearance)
         }
@@ -48,11 +43,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let alerts = AlertsManager()
     let peripherals = PeripheralsMonitor()
     let appearance = AppearanceSettings()
+    let energy = EnergyMonitor()
+    lazy var dashboardServer = DashboardServer(
+        battery: battery,
+        alerts: alerts,
+        peripherals: peripherals,
+        appearance: appearance,
+        energy: energy
+    )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         battery.onUpdate = { [alerts] percentage, isPluggedIn, isCharging in
             alerts.evaluate(percentage: percentage, isPluggedIn: isPluggedIn, isCharging: isCharging)
         }
+        dashboardServer.start()
     }
 }
