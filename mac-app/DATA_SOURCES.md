@@ -115,7 +115,48 @@ other open-source tools use, but is **unverified against real hardware** —
 no Bluetooth accessory has been connected on the development machine while
 testing this.
 
-## 5. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
+## 5. iPhone/iPad battery — `libimobiledevice` (external LGPL-2.1 tool, invoked as a subprocess)
+
+**Source file:** `PeripheralsMonitor.scanIDevices()`
+**Tool:** [`libimobiledevice`](https://libimobiledevice.org) — `idevice_id`
+(list attached device UDIDs) and `ideviceinfo -u <udid> -q com.apple.mobile.battery`
+(query the `BatteryCurrentCapacity`/`BatteryIsCharging` keys), invoked as
+external subprocesses via `Process()`. Not installed/bundled by default —
+requires `brew install libimobiledevice`; if the binaries aren't found,
+this silently contributes nothing to the device list (no error, no crash).
+
+**Researched before implementing** (see conversation history for the full
+writeup): there is **no reliable Bluetooth-only API** for this. The
+real mechanism — confirmed directly from the open-source `AirBattery`
+project's source — is USB-pair-once, then Wi-Fi sync over the same private
+`lockdownd`/MobileDevice protocol used for cable connections
+(`idevice_id -n` lists network-reachable UDIDs once a device has been
+USB-trusted at least once). A pure-Bluetooth fallback exists in principle
+(public `CoreBluetooth`, reading the standard GATT Battery Service 0x180F /
+characteristic 0x2A19) but is unreliable and limited to cellular-capable
+iPhone/iPad — even `AirBattery` ships that path off by default.
+
+**Why a subprocess and not vendored code:** `AirBattery` itself is
+**AGPL-3.0** — incorporating its source would require relicensing this
+entire project away from MIT. `libimobiledevice` (the underlying tool
+`AirBattery` also shells out to) is **LGPL-2.1**, which is fine to invoke
+as an external subprocess without any license obligation on this codebase
+— the same pattern as an app invoking `ffmpeg`. This implementation was
+written from scratch against `libimobiledevice`'s own CLI (`--help` output
+and the `ideviceinfo`/`libplist` source on GitHub for the exact `Key: Value`
+output format), not copied from `AirBattery`.
+
+**Status:** the "no device" code path (tool installed, nothing attached) is
+verified — confirmed empty, zero-error output from `idevice_id -l`/`-n`
+directly, and confirmed the app handles it cleanly with no crash. The
+actual battery-reading path is **unverified against a real iPhone/iPad** —
+no such device was available during development. If it doesn't work, the
+first things to check are: `idevice_id -l` after connecting via USB once
+(confirms basic pairing/trust), then `ideviceinfo -u <udid> -q com.apple.mobile.battery`
+directly in a terminal to see the raw output before suspecting the Swift
+parsing code.
+
+## 6. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
 
 **Source file:** `EnergyMonitor.energyNanojoules(forPid:)`
 **API:** `proc_pid_rusage(pid, RUSAGE_INFO_V6, &buf)`, reading
@@ -150,7 +191,7 @@ channels are hardware/subsystem-scoped (`CPU Energy`, `GPU Energy`, `ANE`,
 apps after fixing an initial bug (see below); compared against `top`/`ps`
 output for plausibility.
 
-## 6. Alerts & notifications — `UserNotifications` (public)
+## 7. Alerts & notifications — `UserNotifications` (public)
 
 **Source file:** `AlertsManager.swift`, `PeripheralsMonitor.notify()`
 **API:** `UNUserNotificationCenter` — standard public framework. Requires
@@ -162,7 +203,7 @@ charging) are evaluated locally from the data above — no additional data
 source, just state-transition logic over what `BatteryMonitor` already
 tracks.
 
-## 7. Menu bar icon — SF Symbols (public)
+## 8. Menu bar icon — SF Symbols (public)
 
 **Source file:** `BatteryIcon.swift`
 Battery glyphs (`battery.0` … `battery.100`) are standard SF Symbols,
