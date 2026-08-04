@@ -69,3 +69,32 @@ Shipped features (dashboard unless noted):
 ## Feature reference
 
 Full parity + enhancement list was worked out against the original product's homepage and `/#features` page; see conversation history for the complete breakdown.
+
+## Releasing
+
+Version lives in the `VERSION` file at repo root. To cut a release:
+
+```bash
+git tag v0.0.1 && git push origin v0.0.1
+```
+
+This triggers [`.github/workflows/release.yml`](.github/workflows/release.yml)
+(modeled on `../CloudMount`'s release workflow), which builds a universal
+(Apple Silicon + Intel) DMG on a `macos-14` runner and publishes it as a
+GitHub Release. Can also be triggered manually via Actions → Release → Run
+workflow, with an optional version override.
+
+Locally, `scripts/build-dmg.sh` does the same thing (`scripts/build-app.sh`
+→ `dist/Lit.app`, universal binary, version stamped into `Info.plist` via
+`plutil`, ad-hoc signed → `dist/lit-<version>.dmg`, using `create-dmg` if
+installed or falling back to plain `hdiutil`). Verified locally before
+wiring up CI: universal binary confirmed via `lipo -info`, version stamp
+confirmed via `plutil -p`, DMG contents confirmed by mounting it, and the
+built app confirmed to actually launch and run stable.
+
+This is distinct from `mac-app/Scripts/build-app.sh`, which is for local
+dev/testing only (native-arch, no version stamping, output stays in
+`mac-app/.build/`).
+
+Builds are unsigned (no Apple Developer ID yet) — Gatekeeper will warn on
+first launch; right-click → Open works around it.

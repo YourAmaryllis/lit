@@ -1,0 +1,115 @@
+# Build a macOS DMG and publish a GitHub Release.
+#
+# Trigger:
+#   - Tag: git tag v0.0.1 && git push origin v0.0.1
+#   - Or Actions -> Release -> Run workflow
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version without v prefix (empty = VERSION file or tag)"
+        required: false
+        default: ""
+      prerelease:
+        description: "Mark GitHub Release as prerelease"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        run: |
+          set -euo pipefail
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            V="${{ github.event.inputs.version }}"
+            V="${V#v}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V="$(tr -d '[:space:]' < VERSION)"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "v$V"
+
+  macos-dmg:
+    name: macOS DMG
+    needs: resolve-version
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set VERSION
+        run: echo "${{ needs.resolve-version.outputs.version }}" > VERSION
+      - name: Build DMG
+        run: |
+          chmod +x scripts/*.sh mac-app/Scripts/*.sh
+          ./scripts/build-dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/lit-*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: [resolve-version, macos-dmg]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -lah dist/
+
+      - name: Create / update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.resolve-version.outputs.version }}
+          name: lit v${{ needs.resolve-version.outputs.version }}
+          generate_release_notes: true
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          files: |
+            dist/lit-*.dmg
+          fail_on_unmatched_files: true
+          body: |
+            ## lit v${{ needs.resolve-version.outputs.version }}
+
+            Free, open source (MIT) native macOS battery alerts & health
+            monitoring. See [DATA_SOURCES.md](https://github.com/${{ github.repository }}/blob/main/mac-app/DATA_SOURCES.md)
+            for exactly where every number comes from.
+
+            ### Install
+            1. Open the DMG -> drag **lit** to Applications
+            2. Right-click -> **Open** if Gatekeeper warns (unsigned — no
+               Apple Developer ID yet)
+            3. lit runs from the **menu bar** — no window opens; look for
+               the battery icon. Click it for a quick glance, or the
+               "Settings" row to open the full dashboard in your browser
+            4. macOS will prompt to allow notifications on first launch —
+               click Allow to get low-battery/lifecycle alerts
+
+            ### Notes
+            - Requires macOS 14 Sonoma or later
+            - Universal binary (Apple Silicon & Intel)
+            - Build is **unsigned** — everything runs locally, nothing
+              phones home; read the source if you want to verify that
+              yourself before trusting it with system access
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
