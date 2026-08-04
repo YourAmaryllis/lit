@@ -23,9 +23,13 @@ final class PeripheralsMonitor: ObservableObject {
 
     init() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+        // .common mode keeps this firing even while the run loop is in
+        // event-tracking mode (e.g. the dropdown open) — see BatteryMonitor.
+        let refreshTimer = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        RunLoop.main.add(refreshTimer, forMode: .common)
+        timer = refreshTimer
     }
 
     func refresh() {

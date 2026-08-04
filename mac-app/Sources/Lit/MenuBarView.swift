@@ -143,47 +143,95 @@ struct MenuBarView: View {
         }
     }
 
+    /// While actively charging, the adapter's power genuinely splits into two
+    /// simultaneous destinations, so it's shown as a branch (one source, two
+    /// rows) rather than a single left-to-right flow. Discharging and idle/full
+    /// only ever have one real destination, so those stay a simple two-node row.
+    @ViewBuilder
     private var powerFlow: some View {
-        let watts = battery.batteryWattage ?? 0
-        let flowing = abs(watts) > 0.05
-        // While actively charging, show a 3-way split: adapter -> battery (the
-        // prominent middle number, real) -> Mac (right node, estimated).
-        // Otherwise it's just adapter<->battery or battery<->Mac, both real.
-        let isChargingFlow = battery.isPluggedIn && battery.isCharging
+        if battery.isPluggedIn && battery.isCharging {
+            chargingSplitFlow
+        } else {
+            simpleFlow
+        }
+    }
 
-        let leftSymbol = battery.isPluggedIn ? "powerplug.fill" : BatteryIcon.symbolName(forPercentage: battery.percentage)
-        let leftLabel = battery.isPluggedIn ? "Adapter" : "Battery"
-        let leftCaption = battery.isPluggedIn ? battery.adapterWattage.map { "\($0)W" } : nil
-
-        let rightSymbol = isChargingFlow || !battery.isPluggedIn
-            ? "laptopcomputer"
-            : BatteryIcon.symbolName(forPercentage: battery.percentage)
-        let rightLabel = isChargingFlow || !battery.isPluggedIn ? "Mac" : "Battery"
-        let rightCaption = isChargingFlow
-            ? battery.estimatedSystemWattageWhileCharging.map { String(format: "~%.0fW", $0) }
-            : nil
-
-        return VStack(spacing: 6) {
-            HStack(spacing: 8) {
-                flowNode(symbol: leftSymbol, label: leftLabel, caption: leftCaption)
-                VStack(spacing: 2) {
-                    Text(flowing ? String(format: "%.1f W", abs(watts)) : "Idle")
-                        .font(.system(size: 14, weight: .bold))
-                    Text(flowCaption)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
+    private var chargingSplitFlow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(spacing: 3) {
+                    Image(systemName: "powerplug.fill").font(.system(size: 18))
+                    Text("Adapter").font(.caption2).foregroundStyle(.secondary)
+                    if let watts = battery.adapterWattage {
+                        Text("\(watts)W").font(.caption2).foregroundStyle(.secondary)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
-                flowNode(symbol: rightSymbol, label: rightLabel, caption: rightCaption)
+                .frame(width: 56)
+
+                Divider().frame(height: 44)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    flowBranchRow(
+                        watts: battery.batteryWattage,
+                        label: "to battery",
+                        symbol: BatteryIcon.symbolName(forPercentage: battery.percentage)
+                    )
+                    flowBranchRow(
+                        watts: battery.estimatedSystemWattageWhileCharging,
+                        label: "to Mac",
+                        symbol: "laptopcomputer",
+                        isEstimate: true
+                    )
+                }
+
+                Spacer(minLength: 0)
             }
-            if rightCaption != nil {
+            if battery.estimatedSystemWattageWhileCharging != nil {
                 Text("Mac power is estimated (adapter rating minus battery draw) — only accurate when the adapter is near its limit.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+        }
+    }
+
+    private func flowBranchRow(watts: Double?, label: String, symbol: String, isEstimate: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            if let watts {
+                Text("\(isEstimate ? "~" : "")\(String(format: "%.1f", watts))W \(label)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+            } else {
+                Text("\u{2014}").font(.caption).fontWeight(.medium)
+            }
+            Image(systemName: symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var simpleFlow: some View {
+        let watts = battery.batteryWattage ?? 0
+        let flowing = abs(watts) > 0.05
+        let leftSymbol = battery.isPluggedIn ? "powerplug.fill" : BatteryIcon.symbolName(forPercentage: battery.percentage)
+        let leftLabel = battery.isPluggedIn ? "Adapter" : "Battery"
+        let leftCaption = battery.isPluggedIn ? battery.adapterWattage.map { "\($0)W" } : nil
+        let rightSymbol = battery.isPluggedIn ? BatteryIcon.symbolName(forPercentage: battery.percentage) : "laptopcomputer"
+        let rightLabel = battery.isPluggedIn ? "Battery" : "Mac"
+
+        return HStack(spacing: 8) {
+            flowNode(symbol: leftSymbol, label: leftLabel, caption: leftCaption)
+            VStack(spacing: 2) {
+                Text(flowing ? String(format: "%.1f W", abs(watts)) : "Idle")
+                    .font(.system(size: 14, weight: .bold))
+                Text(flowCaption)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.06)))
+            flowNode(symbol: rightSymbol, label: rightLabel, caption: nil)
         }
     }
 
@@ -198,9 +246,10 @@ struct MenuBarView: View {
         .frame(width: 56)
     }
 
+    /// simpleFlow only renders for discharging or idle/full — the charging case
+    /// (isPluggedIn && isCharging) is handled separately by chargingSplitFlow.
     private var flowCaption: String {
         if battery.isFullyCharged { return "Battery full" }
-        if battery.isCharging { return "To battery" }
         if !battery.isPluggedIn { return "Discharging" }
         return "Idle"
     }
@@ -290,9 +339,9 @@ struct MenuBarView: View {
     private var energySection: some View {
         DisclosureGroup(isExpanded: binding("energy")) {
             VStack(alignment: .leading, spacing: 10) {
-                let apps = energy.topApps.filter { $0.percent > 0.5 }.prefix(5)
+                let apps = energy.topApps.filter { $0.percent >= 10 }.prefix(5)
                 if apps.isEmpty {
-                    Text("Nothing using significant CPU right now.")
+                    Text("Nothing using significant energy right now.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {

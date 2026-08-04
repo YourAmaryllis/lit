@@ -40,9 +40,15 @@ final class BatteryMonitor: ObservableObject {
 
     init() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
+        // Timer.scheduledTimer only fires in the default run loop mode, which
+        // pauses while the run loop is in event-tracking mode — e.g. while the
+        // menu bar dropdown is open, or during any mouse-tracking interaction.
+        // Adding it in .common mode keeps it firing regardless.
+        let refreshTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        RunLoop.main.add(refreshTimer, forMode: .common)
+        timer = refreshTimer
     }
 
     var healthPercentage: Int? {

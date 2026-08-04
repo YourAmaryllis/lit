@@ -33,9 +33,13 @@ final class EnergyMonitor: ObservableObject {
 
     init() {
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 8, repeats: true) { [weak self] _ in
+        // .common mode keeps this firing even while the run loop is in
+        // event-tracking mode (e.g. the dropdown open) — see BatteryMonitor.
+        let refreshTimer = Timer(timeInterval: 8, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        RunLoop.main.add(refreshTimer, forMode: .common)
+        timer = refreshTimer
     }
 
     func refresh() {

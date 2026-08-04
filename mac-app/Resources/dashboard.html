@@ -109,7 +109,20 @@
   @keyframes flow { from { background-position: 0 0; } to { background-position: -40px 0; } }
   .flow-watts { text-align: center; font-size: 13px; color: var(--text-dim); margin-bottom: 6px; }
   .flow-watts strong { color: var(--text); font-variant-numeric: tabular-nums; }
-  .flow-estimate-note { text-align: center; font-size: 11px; color: var(--text-faint); margin-bottom: 12px; }
+  .flow-estimate-note { text-align: center; font-size: 11px; color: var(--text-faint); margin-bottom: 12px; min-height: 14px; }
+
+  .flow-split-row { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+  .flow-split-source { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 64px; flex-shrink: 0; }
+  .flow-split-source .icon { font-size: 24px; }
+  .flow-split-source .label { font-size: 11px; color: var(--text-dim); }
+  .flow-split-source .caption { font-size: 10px; color: var(--text-faint); }
+  .flow-split-branches {
+    flex: 1; display: flex; flex-direction: column; gap: 10px;
+    border-left: 2px solid var(--track); padding-left: 14px;
+  }
+  .flow-branch { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .flow-branch .icon { font-size: 16px; }
+  .flow-branch .text { font-weight: 600; font-variant-numeric: tabular-nums; }
 
   .capacity-bar { position: relative; height: 10px; border-radius: 999px; background: var(--track); margin-top: 6px; overflow: hidden; }
   .capacity-bar .fill-full { position: absolute; inset: 0; background: var(--track); border-right: 2px solid var(--text-faint); }
@@ -169,12 +182,35 @@
 
     <div class="card">
       <h2>Power &amp; Electrical</h2>
-      <div class="flow">
-        <div class="flow-node"><div class="icon" id="flow-left-icon">🔌</div><div class="label" id="flow-left-label">Adapter</div><div class="caption" id="flow-left-caption"></div></div>
-        <div class="flow-track" id="flow-track"><div class="stripe"></div></div>
-        <div class="flow-node"><div class="icon" id="flow-right-icon">🔋</div><div class="label" id="flow-right-label">Battery</div><div class="caption" id="flow-right-caption"></div></div>
+      <div id="flow-linear">
+        <div class="flow">
+          <div class="flow-node"><div class="icon" id="flow-left-icon">🔌</div><div class="label" id="flow-left-label">Adapter</div><div class="caption" id="flow-left-caption"></div></div>
+          <div class="flow-track" id="flow-track"><div class="stripe"></div></div>
+          <div class="flow-node"><div class="icon" id="flow-right-icon">🔋</div><div class="label" id="flow-right-label">Battery</div><div class="caption" id="flow-right-caption"></div></div>
+        </div>
+        <div class="flow-watts" id="flow-watts">—</div>
       </div>
-      <div class="flow-watts" id="flow-watts">—</div>
+
+      <div id="flow-split" style="display:none;">
+        <div class="flow-split-row">
+          <div class="flow-split-source">
+            <div class="icon">🔌</div>
+            <div class="label">Adapter</div>
+            <div class="caption" id="flow-split-adapter-watts"></div>
+          </div>
+          <div class="flow-split-branches">
+            <div class="flow-branch">
+              <span class="text" id="flow-branch-battery-text">—</span>
+              <span class="icon">🔋</span>
+            </div>
+            <div class="flow-branch">
+              <span class="text" id="flow-branch-mac-text">—</span>
+              <span class="icon">💻</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="flow-estimate-note" id="flow-estimate-note"></div>
       <div class="stat-row"><span class="label">Voltage</span><span class="value" id="voltage">—</span></div>
       <div class="stat-row"><span class="label">Current</span><span class="value" id="amperage">—</span></div>
@@ -295,47 +331,55 @@
     document.getElementById('amperage').textContent = elec.amperageMilliamps != null ? elec.amperageMilliamps + ' mA' : '—';
     document.getElementById('adapter').textContent = elec.adapterWattage != null ? elec.adapterWattage + ' W connected' : 'Not connected';
 
-    const track = document.getElementById('flow-track');
     const watts = elec.wattage;
-    const leftIcon = document.getElementById('flow-left-icon');
-    const leftLabel = document.getElementById('flow-left-label');
-    const leftCaption = document.getElementById('flow-left-caption');
-    const rightIcon = document.getElementById('flow-right-icon');
-    const rightLabel = document.getElementById('flow-right-label');
-    const rightCaption = document.getElementById('flow-right-caption');
-    const wattsLabel = document.getElementById('flow-watts');
+    const isChargingFlow = data.isPluggedIn && data.isCharging;
     const estimateNote = document.getElementById('flow-estimate-note');
 
-    const isChargingFlow = data.isPluggedIn && data.isCharging;
-
-    if (data.isPluggedIn) {
-      leftIcon.textContent = '🔌'; leftLabel.textContent = 'Adapter';
-      leftCaption.textContent = elec.adapterWattage != null ? `${elec.adapterWattage}W` : '';
-    } else {
-      leftIcon.textContent = '🔋'; leftLabel.textContent = 'Battery';
-      leftCaption.textContent = '';
-    }
+    document.getElementById('flow-linear').style.display = isChargingFlow ? 'none' : 'block';
+    document.getElementById('flow-split').style.display = isChargingFlow ? 'block' : 'none';
 
     if (isChargingFlow) {
-      rightIcon.textContent = '💻'; rightLabel.textContent = 'Mac';
-      rightCaption.textContent = elec.estimatedSystemWattage != null ? `~${Math.round(elec.estimatedSystemWattage)}W` : '';
-    } else if (data.isPluggedIn) {
-      rightIcon.textContent = '🔋'; rightLabel.textContent = 'Battery';
-      rightCaption.textContent = '';
+      // Adapter's power genuinely splits into two simultaneous destinations —
+      // shown as one source branching into two rows, not a single flow line.
+      document.getElementById('flow-split-adapter-watts').textContent =
+        elec.adapterWattage != null ? `${elec.adapterWattage}W` : '';
+      document.getElementById('flow-branch-battery-text').textContent =
+        watts != null ? `${Math.abs(watts).toFixed(1)}W to battery` : '—';
+      document.getElementById('flow-branch-mac-text').textContent =
+        elec.estimatedSystemWattage != null ? `~${elec.estimatedSystemWattage.toFixed(1)}W to Mac` : '—';
+      estimateNote.textContent = elec.estimatedSystemWattage != null
+        ? 'Mac power is estimated (adapter rating minus battery draw) — only accurate when the adapter is near its limit.'
+        : '';
     } else {
-      rightIcon.textContent = '💻'; rightLabel.textContent = 'Mac';
-      rightCaption.textContent = '';
+      const track = document.getElementById('flow-track');
+      const leftIcon = document.getElementById('flow-left-icon');
+      const leftLabel = document.getElementById('flow-left-label');
+      const leftCaption = document.getElementById('flow-left-caption');
+      const rightIcon = document.getElementById('flow-right-icon');
+      const rightLabel = document.getElementById('flow-right-label');
+      const rightCaption = document.getElementById('flow-right-caption');
+      const wattsLabel = document.getElementById('flow-watts');
+
+      if (data.isPluggedIn) {
+        leftIcon.textContent = '🔌'; leftLabel.textContent = 'Adapter';
+        leftCaption.textContent = elec.adapterWattage != null ? `${elec.adapterWattage}W` : '';
+        rightIcon.textContent = '🔋'; rightLabel.textContent = 'Battery';
+        rightCaption.textContent = '';
+      } else {
+        leftIcon.textContent = '🔋'; leftLabel.textContent = 'Battery';
+        leftCaption.textContent = '';
+        rightIcon.textContent = '💻'; rightLabel.textContent = 'Mac';
+        rightCaption.textContent = '';
+      }
+
+      const flowing = watts != null && Math.abs(watts) > 0.05;
+      track.classList.toggle('active', flowing);
+      wattsLabel.innerHTML = flowing
+        ? `<strong>${Math.abs(watts).toFixed(1)} W</strong> ${data.isPluggedIn ? 'to battery' : 'discharging'}`
+        : (data.isFullyCharged ? 'Fully charged — no flow' : 'Idle');
+
+      estimateNote.textContent = '';
     }
-
-    const flowing = watts != null && Math.abs(watts) > 0.05;
-    track.classList.toggle('active', flowing);
-    wattsLabel.innerHTML = flowing
-      ? `<strong>${Math.abs(watts).toFixed(1)} W</strong> ${data.isPluggedIn ? 'to battery' : 'discharging'}`
-      : (data.isFullyCharged ? 'Fully charged — no flow' : 'Idle');
-
-    estimateNote.textContent = (isChargingFlow && elec.estimatedSystemWattage != null)
-      ? 'Mac power is estimated (adapter rating minus battery draw) — only accurate when the adapter is near its limit.'
-      : '';
 
     // Capacity
     const cap = data.capacity || {};
@@ -365,9 +409,9 @@
 
     // Energy
     const energyEl = document.getElementById('energy');
-    const apps = (data.energy || []).filter(a => a.percent > 0.05).slice(0, 6);
+    const apps = (data.energy || []).filter(a => a.percent >= 10).slice(0, 6);
     if (apps.length === 0) {
-      energyEl.innerHTML = '<div class="empty">Nothing using significant CPU right now.</div>';
+      energyEl.innerHTML = '<div class="empty">Nothing using significant energy right now.</div>';
     } else {
       const max = Math.max(...apps.map(a => a.percent), 1);
       energyEl.innerHTML = apps.map(a => `
