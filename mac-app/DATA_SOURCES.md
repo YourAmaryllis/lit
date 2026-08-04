@@ -126,30 +126,24 @@ external subprocesses via `Process()`. Not installed/bundled by default —
 requires `brew install libimobiledevice`; if the binaries aren't found,
 this silently contributes nothing to the device list (no error, no crash).
 Cycle count / health % is **not** exposed for connected iOS devices via this
-mechanism (confirmed — not present in the full key dump, and `AirBattery`'s
-own implementation doesn't have it either) — only percentage and charging
-state are real, available data here.
+mechanism (confirmed — not present in the full key dump) — only percentage
+and charging state are real, available data here.
 
-**Researched before implementing** (see conversation history for the full
-writeup): there is **no reliable Bluetooth-only API** for this. The
-real mechanism — confirmed directly from the open-source `AirBattery`
-project's source — is USB-pair-once, then Wi-Fi sync over the same private
-`lockdownd`/MobileDevice protocol used for cable connections
-(`idevice_id -n` lists network-reachable UDIDs once a device has been
-USB-trusted at least once). A pure-Bluetooth fallback exists in principle
-(public `CoreBluetooth`, reading the standard GATT Battery Service 0x180F /
-characteristic 0x2A19) but is unreliable and limited to cellular-capable
-iPhone/iPad — even `AirBattery` ships that path off by default.
+**Researched before implementing:** there is **no reliable Bluetooth-only
+API** for this. The real mechanism is USB-pair-once, then Wi-Fi sync over
+the same private `lockdownd`/MobileDevice protocol used for cable
+connections (`idevice_id -n` lists network-reachable UDIDs once a device
+has been USB-trusted at least once). A pure-Bluetooth fallback exists in
+principle (public `CoreBluetooth`, reading the standard GATT Battery
+Service 0x180F / characteristic 0x2A19), but is unreliable and limited to
+cellular-capable iPhone/iPad.
 
-**Why a subprocess and not vendored code:** `AirBattery` itself is
-**AGPL-3.0** — incorporating its source would require relicensing this
-entire project away from MIT. `libimobiledevice` (the underlying tool
-`AirBattery` also shells out to) is **LGPL-2.1**, which is fine to invoke
-as an external subprocess without any license obligation on this codebase
-— the same pattern as an app invoking `ffmpeg`. This implementation was
-written from scratch against `libimobiledevice`'s own CLI (`--help` output
-and the `ideviceinfo`/`libplist` source on GitHub for the exact `Key: Value`
-output format), not copied from `AirBattery`.
+**Why a subprocess:** `libimobiledevice` is **LGPL-2.1**, which is fine to
+invoke as an external subprocess without any license obligation on this
+MIT-licensed codebase — the same pattern as an app invoking `ffmpeg`. This
+was written from scratch against `libimobiledevice`'s own CLI (`--help`
+output) and the `ideviceinfo`/`libplist` source on GitHub for the exact
+`Key: Value` output format.
 
 **Status: verified against real hardware.** Tested end-to-end with a real
 iPad connected via USB: `idevice_id -l` initially showed nothing even
