@@ -6,6 +6,19 @@ struct PeripheralDevice: Identifiable {
     let id: String
     let name: String
     let batteryPercent: Int
+    /// nil when unknown (Bluetooth HID accessories don't expose this).
+    let isCharging: Bool?
+    /// SF Symbol override for device type (e.g. "ipad", "iphone"). nil falls
+    /// back to the generic battery-level glyph used for Bluetooth accessories.
+    let symbolOverride: String?
+
+    init(id: String, name: String, batteryPercent: Int, isCharging: Bool? = nil, symbolOverride: String? = nil) {
+        self.id = id
+        self.name = name
+        self.batteryPercent = batteryPercent
+        self.isCharging = isCharging
+        self.symbolOverride = symbolOverride
+    }
 }
 
 /// Reads battery levels for two kinds of connected devices, merged into one
@@ -155,9 +168,23 @@ final class PeripheralsMonitor: ObservableObject {
 
             let battery = runKeyValue(ideviceInfoPath, args + ["-q", "com.apple.mobile.battery"])
             guard let capacity = battery["BatteryCurrentCapacity"].flatMap(Int.init) else { continue }
+            let isCharging = battery["BatteryIsCharging"].map { $0 == "true" }
 
             let name = runLines(ideviceInfoPath, args + ["-k", "DeviceName"]).first ?? "iPhone/iPad"
-            results.append(PeripheralDevice(id: "idevice-\(udid)", name: name, batteryPercent: capacity))
+            let deviceClass = runLines(ideviceInfoPath, args + ["-k", "DeviceClass"]).first
+            let symbol: String? = switch deviceClass {
+            case "iPad": "ipad"
+            case "iPhone": "iphone"
+            default: nil
+            }
+
+            results.append(PeripheralDevice(
+                id: "idevice-\(udid)",
+                name: name,
+                batteryPercent: capacity,
+                isCharging: isCharging,
+                symbolOverride: symbol
+            ))
         }
 
         return results

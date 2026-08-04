@@ -120,10 +120,15 @@ testing this.
 **Source file:** `PeripheralsMonitor.scanIDevices()`
 **Tool:** [`libimobiledevice`](https://libimobiledevice.org) — `idevice_id`
 (list attached device UDIDs) and `ideviceinfo -u <udid> -q com.apple.mobile.battery`
-(query the `BatteryCurrentCapacity`/`BatteryIsCharging` keys), invoked as
+(query `BatteryCurrentCapacity`/`BatteryIsCharging`, plus `-k DeviceName` and
+`-k DeviceClass` for the display name and iPad/iPhone icon), invoked as
 external subprocesses via `Process()`. Not installed/bundled by default —
 requires `brew install libimobiledevice`; if the binaries aren't found,
 this silently contributes nothing to the device list (no error, no crash).
+Cycle count / health % is **not** exposed for connected iOS devices via this
+mechanism (confirmed — not present in the full key dump, and `AirBattery`'s
+own implementation doesn't have it either) — only percentage and charging
+state are real, available data here.
 
 **Researched before implementing** (see conversation history for the full
 writeup): there is **no reliable Bluetooth-only API** for this. The
@@ -146,15 +151,28 @@ written from scratch against `libimobiledevice`'s own CLI (`--help` output
 and the `ideviceinfo`/`libplist` source on GitHub for the exact `Key: Value`
 output format), not copied from `AirBattery`.
 
-**Status:** the "no device" code path (tool installed, nothing attached) is
-verified — confirmed empty, zero-error output from `idevice_id -l`/`-n`
-directly, and confirmed the app handles it cleanly with no crash. The
-actual battery-reading path is **unverified against a real iPhone/iPad** —
-no such device was available during development. If it doesn't work, the
-first things to check are: `idevice_id -l` after connecting via USB once
-(confirms basic pairing/trust), then `ideviceinfo -u <udid> -q com.apple.mobile.battery`
-directly in a terminal to see the raw output before suspecting the Swift
-parsing code.
+**Status: verified against real hardware.** Tested end-to-end with a real
+iPad connected via USB: `idevice_id -l` initially showed nothing even
+though the cable was plugged in — turned out to be Apple's **USB Restricted
+Mode** (no data access until the device is unlocked with a passcode/Face ID
+within the last hour; simply waking the screen doesn't count). After
+unlocking and replugging, `idevice_id -l` returned a real UDID, and
+`ideviceinfo -u <udid> -q com.apple.mobile.battery` returned real data
+(`BatteryCurrentCapacity: 90`, `BatteryIsCharging: true`, plus
+`ExternalChargeCapable`/`ExternalConnected`/`FullyCharged`/`HasBattery`).
+Confirmed the app itself picked it up correctly on its next 30s refresh —
+`{"name":"Elia's iPad","batteryPercent":94,"symbolOverride":"ipad","isCharging":true}`
+via the dashboard API, matching the raw tool output, with the percentage
+independently increasing across two checks (94% vs. an earlier 90%/91%),
+confirming it's genuinely live and not a cached/stale read. Rendered
+correctly in the web dashboard too (📱 icon + name + charging bolt + bar).
+The "no device"/"tool not installed" paths were already verified separately
+and remain correct.
+
+If this stops working for you specifically: the most common cause by far is
+**USB Restricted Mode** — fully unlock the device (not just wake it) and
+replug the cable. Second most common: a charge-only cable with no data
+lines.
 
 ## 6. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
 

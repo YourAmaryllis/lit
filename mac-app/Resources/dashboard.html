@@ -238,7 +238,7 @@
   <div class="grid grid-2" style="margin-top:16px;">
     <div class="card">
       <h2>Devices</h2>
-      <div id="devices"><div class="empty">No Bluetooth accessories detected.</div></div>
+      <div id="devices"><div class="empty">No devices detected.</div></div>
     </div>
 
     <div class="card">
@@ -397,14 +397,18 @@
     // Devices
     const devicesEl = document.getElementById('devices');
     if ((data.devices || []).length === 0) {
-      devicesEl.innerHTML = '<div class="empty">No Bluetooth accessories detected.</div>';
+      devicesEl.innerHTML = '<div class="empty">No devices detected.</div>';
     } else {
-      devicesEl.innerHTML = data.devices.map(d => `
+      devicesEl.innerHTML = data.devices.map(d => {
+        const icon = d.symbolOverride ? '📱' : '🔋';
+        const charging = d.isCharging ? ' ⚡' : '';
+        return `
         <div class="list-row">
-          <span class="name">${escapeHtml(d.name)}</span>
+          <span class="name">${icon} ${escapeHtml(d.name)}${charging}</span>
           <span class="bar"><span class="bar-fill" style="width:${d.batteryPercent}%"></span></span>
           <span class="num">${d.batteryPercent}%</span>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
 
     // Energy

@@ -146,7 +146,13 @@ final class DashboardServer {
             ] as [String: Any?],
             "lastHealthUpdate": battery.lastHealthUpdate.map { $0.timeIntervalSince1970 },
             "devices": peripherals.devices.map {
-                ["id": $0.id, "name": $0.name, "batteryPercent": $0.batteryPercent] as [String: Any]
+                [
+                    "id": $0.id,
+                    "name": $0.name,
+                    "batteryPercent": $0.batteryPercent,
+                    "isCharging": $0.isCharging as Any,
+                    "symbolOverride": $0.symbolOverride as Any,
+                ] as [String: Any]
             },
             "alerts": ["thresholds": alerts.thresholds] as [String: Any],
             "appearance": ["iconStyle": appearance.iconStyle.rawValue] as [String: Any],
@@ -159,24 +165,40 @@ final class DashboardServer {
         return (try? JSONSerialization.data(withJSONObject: sanitized)) ?? Data("{}".utf8)
     }
 
-    /// JSONSerialization chokes on Optional<Any> values wrapping nil — normalize to NSNull recursively.
+    /// JSONSerialization chokes on Optional<Any> values wrapping nil — normalize
+    /// to NSNull recursively. Uses reflection (rather than casting to a specific
+    /// `[String: Any?]` vs `[String: Any]` shape) so this is correct regardless
+    /// of how a nested Optional<T> value (e.g. Bool?, String?) ended up boxed as
+    /// Any inside a dictionary — which shape you get depends on exactly how the
+    /// dictionary literal was typed at the call site, and getting that wrong
+    /// silently produces a value JSONSerialization can't encode.
     private func sanitizeForJSON(_ value: Any?) -> Any {
-        switch value {
-        case .none:
-            return NSNull()
-        case .some(let unwrapped):
-            if let dict = unwrapped as? [String: Any?] {
-                var result: [String: Any] = [:]
-                for (key, nested) in dict {
-                    result[key] = sanitizeForJSON(nested)
-                }
-                return result
-            }
-            if let array = unwrapped as? [Any] {
-                return array.map { sanitizeForJSON($0) }
-            }
-            return unwrapped
+        guard let value else { return NSNull() }
+
+        let mirror = Mirror(reflecting: value)
+        if mirror.displayStyle == .optional {
+            guard let unwrapped = mirror.children.first?.value else { return NSNull() }
+            return sanitizeForJSON(unwrapped)
         }
+
+        if let dict = value as? [String: Any?] {
+            var result: [String: Any] = [:]
+            for (key, nested) in dict {
+                result[key] = sanitizeForJSON(nested)
+            }
+            return result
+        }
+        if let dict = value as? [String: Any] {
+            var result: [String: Any] = [:]
+            for (key, nested) in dict {
+                result[key] = sanitizeForJSON(nested)
+            }
+            return result
+        }
+        if let array = value as? [Any] {
+            return array.map { sanitizeForJSON($0) }
+        }
+        return value
     }
 
     private static func loadDashboardHTML() -> String {

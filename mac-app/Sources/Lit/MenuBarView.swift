@@ -318,11 +318,16 @@ struct MenuBarView: View {
         DisclosureGroup(isExpanded: binding("devices")) {
             VStack(spacing: 8) {
                 ForEach(peripherals.devices) { device in
-                    HStack {
-                        Image(systemName: BatteryIcon.symbolName(forPercentage: device.batteryPercent))
+                    HStack(spacing: 6) {
+                        Image(systemName: device.symbolOverride ?? BatteryIcon.symbolName(forPercentage: device.batteryPercent))
                             .foregroundStyle(BatteryIcon.color(forPercentage: device.batteryPercent, isPluggedIn: false))
                             .frame(width: 18)
                         Text(device.name).font(.subheadline).lineLimit(1)
+                        if device.isCharging == true {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.green)
+                        }
                         Spacer()
                         Text("\(device.batteryPercent)%").font(.caption).foregroundStyle(.secondary)
                     }
