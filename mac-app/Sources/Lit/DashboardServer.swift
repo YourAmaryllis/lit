@@ -45,7 +45,7 @@ final class DashboardServer {
 
         guard let listener = try? NWListener(using: parameters) else { return }
         listener.newConnectionHandler = { [weak self] connection in
-            Task { @MainActor in self?.handle(connection: connection) }
+            Task { @MainActor [weak self] in self?.handle(connection: connection) }
         }
         listener.start(queue: .main)
         self.listener = listener
@@ -58,7 +58,7 @@ final class DashboardServer {
 
     private func receive(on connection: NWConnection, buffer: Data) {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 guard let self else { return }
 
                 var buffer = buffer

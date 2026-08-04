@@ -45,7 +45,7 @@ final class BatteryMonitor: ObservableObject {
         // menu bar dropdown is open, or during any mouse-tracking interaction.
         // Adding it in .common mode keeps it firing regardless.
         let refreshTimer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor [weak self] in self?.refresh() }
         }
         RunLoop.main.add(refreshTimer, forMode: .common)
         timer = refreshTimer
