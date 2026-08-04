@@ -20,7 +20,8 @@ No account, no subscription, no telemetry. Everything runs locally.
   pressure state
 - **Connected devices** — Bluetooth accessory battery (AirPods, Magic
   Mouse/Keyboard/Trackpad), iPhone/iPad battery percentage, and Android
-  battery percentage (requires USB debugging enabled on the phone)
+  battery percentage (opt-in from the dashboard; requires USB debugging
+  enabled on the phone)
 - **Apps using significant energy** — ranked by real per-process energy
   usage, not a CPU-time proxy
 - **Custom alert thresholds** — add any percentage, get a real notification
@@ -42,11 +43,16 @@ open it, and drag **lit** into Applications.
 Builds are unsigned (no Apple Developer ID) — right-click → Open on first
 launch if Gatekeeper warns.
 
-iPhone/iPad battery support requires
-[`libimobiledevice`](https://libimobiledevice.org): `brew install libimobiledevice`.
+iPhone/iPad and Android device support ship with the app —
+[`libimobiledevice`](https://libimobiledevice.org) and `adb` are bundled, no
+`brew install` needed. (On Intel Macs, the bundled `libimobiledevice` tools
+are skipped since Homebrew only builds them arm64-only; the app falls back
+to a Homebrew install there — `brew install libimobiledevice`.)
 
-Android battery support requires `adb`: `brew install android-platform-tools`,
-plus Developer Options → USB debugging enabled on the phone.
+Android support is off by default — enable it from the dashboard, under
+"Android Device Support" — since it starts a background `adb` server process
+the first time it's used. Also requires Developer Options → USB debugging
+enabled on the phone.
 
 ## Requirements
 
@@ -65,6 +71,11 @@ swift build                    # or: ./Scripts/build-app.sh [debug|release]
 `swift run` does not work standalone once notifications are involved —
 `UNUserNotificationCenter` requires a real `.app` bundle. Use
 `./Scripts/build-app.sh` to produce one at `mac-app/.build/Lit.app`.
+
+The bundled `adb`/`libimobiledevice` binaries in `mac-app/Resources/vendor/`
+are checked into the repo, so a normal build just picks them up. To
+regenerate them from a fresh Homebrew install (e.g. after a version bump),
+run `./Scripts/vendor-tools.sh`.
 
 ## Project structure
 
@@ -112,3 +123,10 @@ Actions → Release → Run workflow.
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
+
+The app bundles prebuilt third-party CLI tools it invokes as subprocesses
+(never linked into the binary): `adb` (Apache 2.0, part of Android
+Platform Tools) and `libimobiledevice`/`idevice_id`/`ideviceinfo`
+(LGPL-2.1), plus their OpenSSL, `libplist`, and `libusbmuxd` dependencies.
+See `mac-app/Resources/vendor/` and [`mac-app/DATA_SOURCES.md`](mac-app/DATA_SOURCES.md)
+for details.

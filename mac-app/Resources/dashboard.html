@@ -281,6 +281,18 @@
     </select>
   </div>
 
+  <div class="card" style="margin-top:16px;">
+    <h2>Android Device Support</h2>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+      <input type="checkbox" id="android-enabled" style="width:16px; height:16px;" />
+      <span>Scan for connected Android phones over USB (via <code>adb</code>)</span>
+    </label>
+    <div class="empty" style="margin-top:8px;">
+      Off by default — enabling this starts a background <code>adb</code> server
+      process that stays running while lit is open.
+    </div>
+  </div>
+
   <footer>lit — refreshes every 2 seconds · health stats every 2 minutes</footer>
 </div>
 
@@ -468,6 +480,12 @@
     if (document.activeElement !== iconSelect && data.appearance) {
       iconSelect.value = data.appearance.iconStyle;
     }
+
+    // Android toggle
+    const androidCheckbox = document.getElementById('android-enabled');
+    if (document.activeElement !== androidCheckbox && data.android) {
+      androidCheckbox.checked = !!data.android.enabled;
+    }
   }
 
   function escapeHtml(s) {
@@ -491,6 +509,10 @@
       postJSON('/api/thresholds/add', { value });
       input.value = '';
     }
+  });
+
+  document.getElementById('android-enabled').addEventListener('change', e => {
+    postJSON('/api/android-enabled', { enabled: e.target.checked });
   });
 
   document.getElementById('icon-style').addEventListener('change', e => {

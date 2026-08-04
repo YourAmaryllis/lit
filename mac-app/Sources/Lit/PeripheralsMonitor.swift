@@ -33,25 +33,37 @@ struct PeripheralDevice: Identifiable {
 ///    There is no reliable Bluetooth-only API for this: researched first
 ///    (see mac-app/DATA_SOURCES.md) and confirmed the real mechanism other
 ///    tools use is USB-once-then-Wi-Fi-sync via the private lockdownd
-///    protocol, not proximity Bluetooth. Requires `idevice_id`/`ideviceinfo`
-///    to be installed (`brew install libimobiledevice`) and the device to
-///    have been USB-trusted at least once; gracefully shows nothing if the
-///    tool isn't installed or no device is reachable — never crashes or
-///    errors visibly for that case.
+///    protocol, not proximity Bluetooth. `idevice_id`/`ideviceinfo` are
+///    bundled in the app (Resources/vendor, Apple Silicon only) with a
+///    fallback to a Homebrew install (`brew install libimobiledevice`) on
+///    Intel; gracefully shows nothing if neither is available or no device
+///    is reachable — never crashes or errors visibly for that case.
 ///
 /// 3. Android via `adb`/`dumpsys battery` (Apache 2.0, also an external
 ///    subprocess) — public, documented AOSP tooling, unlike the iOS path.
+///    `adb` is bundled in the app (universal, Resources/vendor) with a
+///    fallback to a Homebrew install. Off by default — see `androidEnabled`
+///    — since `adb` leaves a background server daemon running once used.
 ///    Requires Developer Options → USB debugging enabled on the phone and
 ///    one-time on-device authorization; gracefully shows nothing otherwise.
 @MainActor
 final class PeripheralsMonitor: ObservableObject {
     @Published private(set) var devices: [PeripheralDevice] = []
 
+    /// Off by default and opt-in from the dashboard: unlike the HID and
+    /// iPhone/iPad scans, `adb` leaves behind a persistent background
+    /// `adb server` daemon the first time it runs, which isn't something
+    /// this app should start on every user's machine unasked.
+    @Published var androidEnabled: Bool {
+        didSet { UserDefaults.standard.set(androidEnabled, forKey: "lit.androidEnabled") }
+    }
+
     private var lowBatteryFired: Set<String> = []
     private var fullyChargedFired: Set<String> = []
     private var timer: Timer?
 
     init() {
+        androidEnabled = UserDefaults.standard.bool(forKey: "lit.androidEnabled")
         refresh()
         // .common mode keeps this firing even while the run loop is in
         // event-tracking mode (e.g. the dropdown open) — see BatteryMonitor.
@@ -63,10 +75,11 @@ final class PeripheralsMonitor: ObservableObject {
     }
 
     func refresh() {
+        let androidEnabled = self.androidEnabled
         Task.detached(priority: .utility) {
             let hidDevices = Self.scanHIDBatteryDevices()
             let idevices = Self.scanIDevices()
-            let androidDevices = Self.scanAndroidDevices()
+            let androidDevices = androidEnabled ? Self.scanAndroidDevices() : []
             let combined = hidDevices + idevices + androidDevices
             await MainActor.run { [weak self] in
                 guard let self else { return }
@@ -242,6 +255,9 @@ final class PeripheralsMonitor: ObservableObject {
     }
 
     private nonisolated static func findBinary(_ name: String) -> String? {
+        if let bundled = bundledBinaryPath(name) {
+            return bundled
+        }
         for dir in ["/opt/homebrew/bin", "/usr/local/bin"] {
             let path = "\(dir)/\(name)"
             if FileManager.default.isExecutableFile(atPath: path) {
@@ -249,6 +265,32 @@ final class PeripheralsMonitor: ObservableObject {
             }
         }
         return nil
+    }
+
+    /// Tools vendored into the app bundle (see mac-app/Scripts/vendor-tools.sh)
+    /// so neither `adb` nor `libimobiledevice` needs a separate `brew install`.
+    /// `adb` is a universal binary; the libimobiledevice tools were relinked
+    /// from an arm64-only Homebrew build, so they're skipped on Intel and
+    /// `findBinary` falls back to a Homebrew install there instead.
+    private nonisolated static func bundledBinaryPath(_ name: String) -> String? {
+        guard let resourceURL = Bundle.main.resourceURL else { return nil }
+
+        let relativePath: String
+        switch name {
+        case "adb":
+            relativePath = "vendor/adb/adb"
+        case "idevice_id", "ideviceinfo":
+            #if arch(arm64)
+            relativePath = "vendor/libimobiledevice/bin/\(name)"
+            #else
+            return nil
+            #endif
+        default:
+            return nil
+        }
+
+        let path = resourceURL.appendingPathComponent(relativePath).path
+        return FileManager.default.isExecutableFile(atPath: path) ? path : nil
     }
 
     private nonisolated static func runLines(_ executablePath: String, _ arguments: [String]) -> [String] {

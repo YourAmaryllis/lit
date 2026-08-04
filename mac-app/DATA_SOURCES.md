@@ -122,9 +122,32 @@ testing this.
 (list attached device UDIDs) and `ideviceinfo -u <udid> -q com.apple.mobile.battery`
 (query `BatteryCurrentCapacity`/`BatteryIsCharging`, plus `-k DeviceName` and
 `-k DeviceClass` for the display name and iPad/iPhone icon), invoked as
-external subprocesses via `Process()`. Not installed/bundled by default —
-requires `brew install libimobiledevice`; if the binaries aren't found,
-this silently contributes nothing to the device list (no error, no crash).
+external subprocesses via `Process()`. **Bundled in the app** — see
+`mac-app/Resources/vendor/libimobiledevice/` and `Scripts/vendor-tools.sh` —
+so no `brew install` is required on Apple Silicon. Homebrew only builds
+these arm64-only, so on Intel the bundled copies are skipped and
+`findBinary` falls back to a Homebrew install (`brew install
+libimobiledevice`) instead. If neither is found, this silently contributes
+nothing to the device list (no error, no crash).
+
+**How the bundled copies work:** `idevice_id`/`ideviceinfo` and their 6
+dylib dependencies (`libimobiledevice`, `libssl`, `libcrypto`, `libusbmuxd`,
+`libimobiledevice-glue`, `libplist`) were copied out of a Homebrew install
+and relinked with `install_name_tool` — binaries reference their dylibs via
+`@executable_path/../lib/<name>.dylib`, and dylibs reference each other via
+`@loader_path/<name>.dylib` — then re-signed ad-hoc, so the whole set is
+self-contained and location-independent inside `Contents/Resources/vendor/`.
+Verified by temporarily renaming the Homebrew-installed `adb`/`idevice_id`/
+`ideviceinfo` out of `/opt/homebrew/bin` (removing the fallback entirely)
+and confirming the running app kept working off the bundled copies alone:
+`scanIDevices()` runs unconditionally on every 30s refresh, so this
+exercised the bundled `idevice_id`/`ideviceinfo` and their full relinked
+dylib chain repeatedly with no dyld/missing-library crash and nothing in
+Console or `~/Library/Logs/DiagnosticReports`. No physical iPhone/iPad was
+connected during that pass, though, so this confirms the binaries launch
+and run cleanly off the bundled dylibs — not that a real device is
+correctly detected through them; worth reconfirming end-to-end next time a
+device is plugged in.
 Cycle count / health % is **not** exposed for connected iOS devices via this
 mechanism (confirmed — not present in the full key dump) — only percentage
 and charging state are real, available data here.
@@ -176,10 +199,22 @@ Apache 2.0) — `adb devices` to enumerate authorized devices, then
 `adb -s <serial> shell dumpsys battery` for `level`/`status`, plus
 `adb -s <serial> shell getprop ro.product.model` for the display name.
 Invoked as an external subprocess, not linked — same MIT-clean pattern as
-the iOS path. Not installed by default — requires
-`brew install android-platform-tools`; if `adb` isn't found, no device is
+the iOS path. **Bundled in the app** (universal arm64+x86_64, zero external
+dylib dependencies, so unlike `libimobiledevice` this one needed no
+relinking — just a straight copy into `Resources/vendor/adb/`) — falls
+back to a Homebrew install (`brew install android-platform-tools`) if the
+bundled copy is somehow missing. If neither is found, no device is
 attached, or a device is attached but not yet authorized, this contributes
 nothing to the device list, no error, no crash.
+
+**Off by default — opt-in from the dashboard.** Unlike the HID and iOS
+scans, Android scanning is gated behind `PeripheralsMonitor.androidEnabled`
+(`UserDefaults` key `lit.androidEnabled`, toggled via the "Android Device
+Support" card in the web dashboard / `POST /api/android-enabled`) and
+defaults to `false`. This is deliberate, not a parity gap: the first
+`adb devices` call starts a persistent background `adb server` process (see
+below) that most users wouldn't expect an app to spin up unasked just for
+having it installed.
 
 Unlike the iOS mechanism, this is **not** a reverse-engineered private
 protocol — `adb`/`dumpsys` are official, documented parts of the Android
@@ -217,6 +252,15 @@ name + charging bolt + bar). App remained stable throughout, no crashes,
 no errors, despite the unusually large `dumpsys` output. The "adb not
 installed"/"no device attached" paths were verified separately beforehand
 and remain correct.
+
+Also verified after bundling: with the Homebrew-installed `adb` renamed out
+of `/opt/homebrew/bin` and the dashboard toggle switched on, the running
+app spawned the bundled `adb`'s background server correctly (confirmed via
+`ps`/the server's own log) with no crash or hang — proving the bundled
+copy is genuinely load-bearing, not just present. No Android device was
+attached during that specific pass, so the toggle's default-off behavior
+and the bundled server-spawn were both confirmed; a fresh real-device
+capture through the bundled binary specifically is still worth doing.
 
 ## 7. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
 

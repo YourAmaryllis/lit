@@ -107,6 +107,12 @@ final class DashboardServer {
                 appearance.iconStyle = style
             }
             response = .json(statusJSON())
+        case ("POST", "/api/android-enabled"):
+            if let enabled = request.jsonBody?["enabled"] as? Bool {
+                peripherals.androidEnabled = enabled
+                peripherals.refresh()
+            }
+            response = .json(statusJSON())
         case ("POST", "/api/health/refresh"):
             battery.refreshHealthNow()
             response = .json(statusJSON())
@@ -164,6 +170,7 @@ final class DashboardServer {
             },
             "alerts": ["thresholds": alerts.thresholds] as [String: Any],
             "appearance": ["iconStyle": appearance.iconStyle.rawValue] as [String: Any],
+            "android": ["enabled": peripherals.androidEnabled] as [String: Any],
             "energy": energy.topApps.map {
                 ["id": $0.id, "name": $0.name, "percent": $0.percent, "watts": $0.watts] as [String: Any]
             },

@@ -20,6 +20,10 @@ cp ".build/${CONFIGURATION}/${APP_NAME}" "$APP_BUNDLE/Contents/MacOS/${APP_NAME}
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 cp "Resources/dashboard.html" "$APP_BUNDLE/Contents/Resources/dashboard.html"
 
+if [[ -d "Resources/vendor" ]]; then
+  cp -R "Resources/vendor" "$APP_BUNDLE/Contents/Resources/vendor"
+fi
+
 codesign --force --deep --sign - "$APP_BUNDLE"
 
 echo "Built: $APP_BUNDLE"

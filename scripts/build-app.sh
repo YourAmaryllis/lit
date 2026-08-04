@@ -33,6 +33,10 @@ chmod +x "$MACOS/Lit"
 cp "$MAC_APP/Resources/Info.plist" "$CONTENTS/Info.plist"
 cp "$MAC_APP/Resources/dashboard.html" "$RES/dashboard.html"
 
+if [[ -d "$MAC_APP/Resources/vendor" ]]; then
+  cp -R "$MAC_APP/Resources/vendor" "$RES/vendor"
+fi
+
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$CONTENTS/Info.plist"
 plutil -replace CFBundleVersion -string "$VERSION" "$CONTENTS/Info.plist"
 
