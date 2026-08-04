@@ -168,7 +168,46 @@ If this stops working for you specifically: the most common cause by far is
 replug the cable. Second most common: a charge-only cable with no data
 lines.
 
-## 6. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
+## 6. Android battery — `adb`/`dumpsys battery` (external Apache 2.0 tool, invoked as a subprocess)
+
+**Source file:** `PeripheralsMonitor.scanAndroidDevices()`
+**Tool:** [`adb`](https://developer.android.com/tools/adb) (`android-platform-tools`,
+Apache 2.0) — `adb devices` to enumerate authorized devices, then
+`adb -s <serial> shell dumpsys battery` for `level`/`status`, plus
+`adb -s <serial> shell getprop ro.product.model` for the display name.
+Invoked as an external subprocess, not linked — same MIT-clean pattern as
+the iOS path. Not installed by default — requires
+`brew install android-platform-tools`; if `adb` isn't found, no device is
+attached, or a device is attached but not yet authorized, this contributes
+nothing to the device list, no error, no crash.
+
+Unlike the iOS mechanism, this is **not** a reverse-engineered private
+protocol — `adb`/`dumpsys` are official, documented parts of the Android
+platform tooling. The real friction is on the phone's side instead: this
+only works if **Developer Options → USB debugging** is enabled (off by
+default, buried behind tapping the build number seven times — most
+non-technical users have never turned it on), plus a one-time on-device
+"Allow USB debugging?" authorization per Mac, conceptually the same as
+iOS's USB trust prompt.
+
+Charging state is derived from Android's `BatteryManager` status constants
+(`status: 2` = charging, `status: 5` = full) — both are treated as
+charging here.
+
+**Side effect worth knowing about:** the first `adb devices` call spawns a
+persistent background `adb server` process (listening on `tcp:5037`) that
+keeps running after the call returns — standard `adb` behavior, not a bug
+in this app, but a real background process that will show up in Activity
+Monitor once Android detection has run at least once.
+
+**Status: structurally verified, not yet tested against real hardware.**
+The "adb not installed" and "no device attached" paths are confirmed
+clean — no crash, no error, matches the same graceful pattern already
+verified for the iOS path. The actual battery-reading path (real device,
+USB debugging enabled and authorized) has not been tested — no Android
+device with debugging enabled was available during development.
+
+## 7. Apps Using Significant Energy — `proc_pid_rusage` (public API, undocumented semantics)
 
 **Source file:** `EnergyMonitor.energyNanojoules(forPid:)`
 **API:** `proc_pid_rusage(pid, RUSAGE_INFO_V6, &buf)`, reading
@@ -203,7 +242,7 @@ channels are hardware/subsystem-scoped (`CPU Energy`, `GPU Energy`, `ANE`,
 apps after fixing an initial bug (see below); compared against `top`/`ps`
 output for plausibility.
 
-## 7. System Temperature (CPU/GPU) — SMC (private, undocumented) + `ProcessInfo.thermalState` (public)
+## 8. System Temperature (CPU/GPU) — SMC (private, undocumented) + `ProcessInfo.thermalState` (public)
 
 **Source files:** `SMCReader.swift`, `SystemTemperatureMonitor.swift`
 
@@ -273,7 +312,7 @@ layout or key codes are wrong — an alignment or decode bug produces
 symptoms (nil, or wrong-looking numbers) that are easy to misattribute to
 connection/permission/timing issues, exactly as happened here.
 
-## 8. Alerts & notifications — `UserNotifications` (public)
+## 9. Alerts & notifications — `UserNotifications` (public)
 
 **Source file:** `AlertsManager.swift`, `PeripheralsMonitor.notify()`
 **API:** `UNUserNotificationCenter` — standard public framework. Requires
@@ -285,7 +324,7 @@ charging) are evaluated locally from the data above — no additional data
 source, just state-transition logic over what `BatteryMonitor` already
 tracks.
 
-## 9. Menu bar icon — SF Symbols (public)
+## 10. Menu bar icon — SF Symbols (public)
 
 **Source file:** `BatteryIcon.swift`
 Battery glyphs (`battery.0` … `battery.100`) are standard SF Symbols,

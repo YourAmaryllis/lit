@@ -21,7 +21,7 @@ struct PeripheralDevice: Identifiable {
     }
 }
 
-/// Reads battery levels for two kinds of connected devices, merged into one
+/// Reads battery levels for three kinds of connected devices, merged into one
 /// list, with shared low-battery/fully-charged alert logic:
 ///
 /// 1. Bluetooth HID accessories (AirPods, Beats, Magic Mouse/Keyboard/
@@ -38,6 +38,11 @@ struct PeripheralDevice: Identifiable {
 ///    have been USB-trusted at least once; gracefully shows nothing if the
 ///    tool isn't installed or no device is reachable — never crashes or
 ///    errors visibly for that case.
+///
+/// 3. Android via `adb`/`dumpsys battery` (Apache 2.0, also an external
+///    subprocess) — public, documented AOSP tooling, unlike the iOS path.
+///    Requires Developer Options → USB debugging enabled on the phone and
+///    one-time on-device authorization; gracefully shows nothing otherwise.
 @MainActor
 final class PeripheralsMonitor: ObservableObject {
     @Published private(set) var devices: [PeripheralDevice] = []
@@ -61,7 +66,8 @@ final class PeripheralsMonitor: ObservableObject {
         Task.detached(priority: .utility) {
             let hidDevices = Self.scanHIDBatteryDevices()
             let idevices = Self.scanIDevices()
-            let combined = hidDevices + idevices
+            let androidDevices = Self.scanAndroidDevices()
+            let combined = hidDevices + idevices + androidDevices
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 for device in combined {
@@ -184,6 +190,51 @@ final class PeripheralsMonitor: ObservableObject {
                 batteryPercent: capacity,
                 isCharging: isCharging,
                 symbolOverride: symbol
+            ))
+        }
+
+        return results
+    }
+
+    // MARK: - Android via adb
+
+    /// `adb`/`dumpsys` is public, documented AOSP tooling (Apache 2.0) —
+    /// unlike the iOS path, this isn't a reverse-engineered private protocol.
+    /// The real friction is on the phone's side: this only works if
+    /// Developer Options → USB debugging is enabled (off by default, and
+    /// most non-technical users have never turned it on) and the device has
+    /// been authorized for this Mac at least once (a one-time on-device
+    /// "Allow USB debugging?" prompt, same idea as iOS's USB trust).
+    /// Gracefully contributes nothing if `adb` isn't installed, no device is
+    /// attached, or a device is attached but not yet authorized.
+    private nonisolated static func scanAndroidDevices() -> [PeripheralDevice] {
+        guard let adbPath = findBinary("adb") else { return [] }
+
+        let lines = runLines(adbPath, ["devices"])
+        let serials = lines.compactMap { line -> String? in
+            let parts = line.split(separator: "\t")
+            guard parts.count == 2, parts[1] == "device" else { return nil }
+            return String(parts[0])
+        }
+
+        var results: [PeripheralDevice] = []
+        for serial in serials {
+            let battery = runKeyValue(adbPath, ["-s", serial, "shell", "dumpsys", "battery"])
+            guard let level = battery["level"].flatMap(Int.init) else { continue }
+
+            // Android BatteryManager status constants: 2 = CHARGING, 5 = FULL.
+            let statusCode = battery["status"].flatMap(Int.init)
+            let isCharging = statusCode.map { $0 == 2 || $0 == 5 }
+
+            let name = runLines(adbPath, ["-s", serial, "shell", "getprop", "ro.product.model"]).first
+                ?? "Android Device"
+
+            results.append(PeripheralDevice(
+                id: "android-\(serial)",
+                name: name,
+                batteryPercent: level,
+                isCharging: isCharging,
+                symbolOverride: "candybarphone"
             ))
         }
 

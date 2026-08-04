@@ -19,7 +19,8 @@ No account, no subscription, no telemetry. Everything runs locally.
 - **System temperature** — CPU/GPU temperature (Apple Silicon) plus thermal
   pressure state
 - **Connected devices** — Bluetooth accessory battery (AirPods, Magic
-  Mouse/Keyboard/Trackpad) and iPhone/iPad battery percentage
+  Mouse/Keyboard/Trackpad), iPhone/iPad battery percentage, and Android
+  battery percentage (requires USB debugging enabled on the phone)
 - **Apps using significant energy** — ranked by real per-process energy
   usage, not a CPU-time proxy
 - **Custom alert thresholds** — add any percentage, get a real notification
@@ -43,6 +44,9 @@ launch if Gatekeeper warns.
 
 iPhone/iPad battery support requires
 [`libimobiledevice`](https://libimobiledevice.org): `brew install libimobiledevice`.
+
+Android battery support requires `adb`: `brew install android-platform-tools`,
+plus Developer Options → USB debugging enabled on the phone.
 
 ## Requirements
 
