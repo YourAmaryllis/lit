@@ -285,10 +285,35 @@ struct MenuBarView: View {
                 Text("CPU-based estimate, normalized by core count — not true Energy Impact.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+
+                Button {
+                    openActivityMonitor()
+                } label: {
+                    HStack {
+                        Image(systemName: "square.stack.3d.up")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text("Open App Usage")
+                            .font(.caption)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 2)
             }
             .padding(.top, 6)
         } label: {
             sectionLabel("Apps Using Significant Energy", symbol: "bolt.fill", color: .orange)
+        }
+    }
+
+    private func openActivityMonitor() {
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.ActivityMonitor") {
+            NSWorkspace.shared.open(url)
         }
     }
 
