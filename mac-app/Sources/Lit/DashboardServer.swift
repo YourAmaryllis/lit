@@ -150,7 +150,7 @@ final class DashboardServer {
             "alerts": ["thresholds": alerts.thresholds] as [String: Any],
             "appearance": ["iconStyle": appearance.iconStyle.rawValue] as [String: Any],
             "energy": energy.topApps.map {
-                ["id": $0.id, "name": $0.name, "percent": $0.percent] as [String: Any]
+                ["id": $0.id, "name": $0.name, "percent": $0.percent, "watts": $0.watts] as [String: Any]
             },
         ]
 

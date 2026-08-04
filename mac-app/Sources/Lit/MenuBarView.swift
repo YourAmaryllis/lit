@@ -282,7 +282,7 @@ struct MenuBarView: View {
                         energyRow(app)
                     }
                 }
-                Text("CPU-based estimate, normalized by core count — not true Energy Impact.")
+                Text("Real energy usage from the kernel, as a % share of the total across every running app.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 

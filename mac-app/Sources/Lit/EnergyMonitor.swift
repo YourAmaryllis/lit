@@ -1,25 +1,35 @@
 import Foundation
 import AppKit
+import Darwin
 
 struct AppEnergyUsage: Identifiable {
     let id: String
     let name: String
-    /// CPU load normalized against total core count, 0-100. This is a proxy for
-    /// energy impact, not a true joules measurement — real "Energy Impact" needs
-    /// the private IOReport framework, which isn't wired up here.
+    /// Share of total measured energy impact across all running apps, 0-100 —
+    /// summing the top N shown will legitimately be less than 100 if there are
+    /// more running apps than are displayed.
     let percent: Double
+    let watts: Double
 }
 
-/// Ranks running *applications* (not every daemon/CLI process) by CPU usage,
-/// since there's no public API for per-app energy impact. `powermetrics` would
-/// give real numbers but refuses to run without root, which isn't something a
-/// menu bar app should ask for.
+private struct EnergySample {
+    let energyNanojoules: UInt64
+    let timestamp: Date
+}
+
+/// Real per-app energy, not a CPU-time proxy — `proc_pid_rusage(pid,
+/// RUSAGE_INFO_V6, ...)` exposes `ri_energy_nj`, a cumulative nanojoule
+/// counter the kernel bills to each process (the same underlying number
+/// Activity Monitor's Energy tab is built on). It's public API in <libproc.h>
+/// (no dlopen/private framework), and needs no root for same-user processes.
+/// The counter is cumulative since process launch, so usage here is a power
+/// reading (watts) computed from the delta between two samples.
 @MainActor
 final class EnergyMonitor: ObservableObject {
     @Published private(set) var topApps: [AppEnergyUsage] = []
 
     private var timer: Timer?
-    private let coreCount = Double(max(ProcessInfo.processInfo.activeProcessorCount, 1))
+    private var previousSamples: [pid_t: EnergySample] = [:]
 
     init() {
         refresh()
@@ -29,64 +39,56 @@ final class EnergyMonitor: ObservableObject {
     }
 
     func refresh() {
-        // NSWorkspace needs the main actor — snapshot the pid -> app-name map
-        // here, before hopping off to sample `top` on a background thread.
-        let appNames: [pid_t: String] = Dictionary(
-            NSWorkspace.shared.runningApplications.compactMap { app -> (pid_t, String)? in
-                guard let name = app.localizedName else { return nil }
-                return (app.processIdentifier, name)
-            },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let apps = NSWorkspace.shared.runningApplications
+        let now = Date()
 
-        Task.detached(priority: .utility) { [coreCount] in
-            let apps = Self.sampleTopProcesses(coreCount: coreCount, appNames: appNames)
-            await MainActor.run { [weak self] in
-                self?.topApps = apps
+        var currentSamples: [pid_t: EnergySample] = [:]
+        var wattsByPid: [pid_t: Double] = [:]
+
+        for app in apps {
+            let pid = app.processIdentifier
+            guard let energy = Self.energyNanojoules(forPid: pid) else { continue }
+            currentSamples[pid] = EnergySample(energyNanojoules: energy, timestamp: now)
+
+            if let previous = previousSamples[pid], energy >= previous.energyNanojoules {
+                let deltaEnergyJoules = Double(energy - previous.energyNanojoules) / 1_000_000_000
+                let deltaSeconds = now.timeIntervalSince(previous.timestamp)
+                if deltaSeconds > 0 {
+                    wattsByPid[pid] = deltaEnergyJoules / deltaSeconds
+                }
             }
         }
-    }
 
-    private nonisolated static func sampleTopProcesses(
-        coreCount: Double,
-        appNames: [pid_t: String]
-    ) -> [AppEnergyUsage] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/top")
-        // `-l 2`: top computes %CPU as a delta between samples, so a single
-        // sample (`-l 1`) has nothing to diff against and reports 0.0 for
-        // every process. Two samples (~1s apart) give real numbers; we keep
-        // only the second, accurate one.
-        process.arguments = ["-l", "2", "-o", "cpu", "-n", "40", "-stats", "pid,cpu"]
+        previousSamples = currentSamples
 
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        guard (try? process.run()) != nil else { return [] }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-
-        guard let output = String(data: data, encoding: .utf8) else { return [] }
-
-        let lines = output.components(separatedBy: "\n")
-        guard let lastHeaderIndex = lines.lastIndex(where: { $0.trimmingCharacters(in: .whitespaces).hasPrefix("PID") }) else {
-            return []
-        }
-
-        var cpuByPid: [pid_t: Double] = [:]
-        for line in lines[(lastHeaderIndex + 1)...] {
-            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
-            guard fields.count == 2, let pid = pid_t(fields[0]), let cpu = Double(fields[1]) else { continue }
-            cpuByPid[pid] = cpu
+        let totalWatts = wattsByPid.values.reduce(0, +)
+        guard totalWatts > 0 else {
+            topApps = []
+            return
         }
 
         var results: [AppEnergyUsage] = []
-        for (pid, name) in appNames {
-            guard let cpu = cpuByPid[pid] else { continue }
-            results.append(AppEnergyUsage(id: String(pid), name: name, percent: min(cpu / coreCount, 100)))
+        for app in apps {
+            guard let watts = wattsByPid[app.processIdentifier], let name = app.localizedName else { continue }
+            results.append(AppEnergyUsage(
+                id: String(app.processIdentifier),
+                name: name,
+                percent: (watts / totalWatts) * 100,
+                watts: watts
+            ))
         }
 
-        return results.sorted { $0.percent > $1.percent }
+        topApps = results.sorted { $0.percent > $1.percent }
+    }
+
+    private static func energyNanojoules(forPid pid: pid_t) -> UInt64? {
+        var info = rusage_info_v6()
+        let result = withUnsafeMutablePointer(to: &info) { pointer -> Int32 in
+            pointer.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { rawPointer in
+                proc_pid_rusage(pid, RUSAGE_INFO_V6, rawPointer)
+            }
+        }
+        guard result == 0 else { return nil }
+        return info.ri_energy_nj
     }
 }
