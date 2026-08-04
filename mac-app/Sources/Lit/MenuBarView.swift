@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @ObservedObject var battery: BatteryMonitor
     @ObservedObject var peripherals: PeripheralsMonitor
     @ObservedObject var energy: EnergyMonitor
+    @ObservedObject var temperature: SystemTemperatureMonitor
     let dashboardURL: URL
 
     @State private var expanded: Set<String> = ["health", "power", "capacity", "energy"]
@@ -21,6 +22,9 @@ struct MenuBarView: View {
                 batteryInfoSection
                 powerSection
                 capacitySection
+                if temperature.cpuTemperatureCelsius != nil || temperature.gpuTemperatureCelsius != nil {
+                    systemTemperatureSection
+                }
                 if !peripherals.devices.isEmpty {
                     devicesSection
                 }
@@ -310,6 +314,59 @@ struct MenuBarView: View {
         let seconds = Int(Date().timeIntervalSince(date))
         if seconds < 60 { return "Updated just now" }
         return "Updated \(seconds / 60)m ago"
+    }
+
+    // MARK: System Temperature
+
+    private var systemTemperatureSection: some View {
+        DisclosureGroup(isExpanded: binding("temperature")) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    if let cpu = temperature.cpuTemperatureCelsius {
+                        temperatureStat("CPU", celsius: cpu)
+                    }
+                    Spacer()
+                    if let gpu = temperature.gpuTemperatureCelsius {
+                        temperatureStat("GPU", celsius: gpu, trailing: true)
+                    }
+                }
+                HStack {
+                    Text("Thermal Pressure").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(temperature.thermalPressure.rawValue)
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(thermalPressureColor(temperature.thermalPressure))
+                }
+            }
+            .padding(.top, 6)
+        } label: {
+            sectionLabel("System Temperature", symbol: "thermometer.medium", color: .red)
+        }
+    }
+
+    private func temperatureStat(_ label: String, celsius: Double, trailing: Bool = false) -> some View {
+        VStack(alignment: trailing ? .trailing : .leading, spacing: 2) {
+            Text(String(format: "%.0f\u{00B0}C", celsius))
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(temperatureColor(celsius))
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    private func temperatureColor(_ celsius: Double) -> Color {
+        if celsius >= 90 { return .red }
+        if celsius >= 75 { return .orange }
+        return .primary
+    }
+
+    private func thermalPressureColor(_ pressure: ThermalPressure) -> Color {
+        switch pressure {
+        case .nominal: return .green
+        case .fair: return .yellow
+        case .serious: return .orange
+        case .critical: return .red
+        }
     }
 
     // MARK: Devices

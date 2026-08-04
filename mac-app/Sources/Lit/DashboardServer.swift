@@ -16,6 +16,7 @@ final class DashboardServer {
     private let peripherals: PeripheralsMonitor
     private let appearance: AppearanceSettings
     private let energy: EnergyMonitor
+    private let temperature: SystemTemperatureMonitor
     private let dashboardHTML: String
     private var listener: NWListener?
 
@@ -24,13 +25,15 @@ final class DashboardServer {
         alerts: AlertsManager,
         peripherals: PeripheralsMonitor,
         appearance: AppearanceSettings,
-        energy: EnergyMonitor
+        energy: EnergyMonitor,
+        temperature: SystemTemperatureMonitor
     ) {
         self.battery = battery
         self.alerts = alerts
         self.peripherals = peripherals
         self.appearance = appearance
         self.energy = energy
+        self.temperature = temperature
         self.dashboardHTML = Self.loadDashboardHTML()
     }
 
@@ -145,6 +148,11 @@ final class DashboardServer {
                 "estimatedSystemWattage": battery.estimatedSystemWattageWhileCharging,
             ] as [String: Any?],
             "lastHealthUpdate": battery.lastHealthUpdate.map { $0.timeIntervalSince1970 },
+            "systemTemperature": [
+                "cpuCelsius": temperature.cpuTemperatureCelsius,
+                "gpuCelsius": temperature.gpuTemperatureCelsius,
+                "thermalPressure": temperature.thermalPressure.rawValue,
+            ] as [String: Any?],
             "devices": peripherals.devices.map {
                 [
                     "id": $0.id,

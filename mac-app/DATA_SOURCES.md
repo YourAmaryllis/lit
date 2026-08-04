@@ -209,7 +209,77 @@ channels are hardware/subsystem-scoped (`CPU Energy`, `GPU Energy`, `ANE`,
 apps after fixing an initial bug (see below); compared against `top`/`ps`
 output for plausibility.
 
-## 7. Alerts & notifications — `UserNotifications` (public)
+## 7. System Temperature (CPU/GPU) — SMC (private, undocumented) + `ProcessInfo.thermalState` (public)
+
+**Source files:** `SMCReader.swift`, `SystemTemperatureMonitor.swift`
+
+**Mechanism:** the same undocumented SMC (System Management Controller)
+technique smcFanControl/TG Pro/iStat Menus and the open-source
+`exelban/stats` (MIT) use — `IOServiceOpen("AppleSMC")`, then
+`IOConnectCallStructMethod` with an undocumented `SMCKeyData_t`-equivalent
+struct to read individual 4-character sensor keys. **Researched and ported
+from real, current source before writing anything** — the struct layout,
+selector values, and decode logic were pulled verbatim from `stats`'
+`SMC/smc.swift`, not reconstructed from memory, since a wrong memory layout
+here risks a hang/crash on the raw IOKit call, not just wrong data.
+
+**Apple Silicon key list is model-specific and only verified for this
+machine** (MacBook Air, Mac16,12, base M4):
+
+```
+CPU efficiency cores: Te05, Te0S, Te09, Te0H
+CPU performance cores: Tp01, Tp05, Tp09, Tp0D, Tp0V, Tp0Y, Tp0b, Tp0e
+GPU: Tg0G, Tg0H
+```
+
+Sourced from `exelban/stats`' `Modules/Sensors/values.swift` (itself sourced
+from `acidanthera/VirtualSMC`'s `SMCSensorKeys.txt`). Other chip generations
+(M1/M2/M3, Pro/Max/Ultra variants, Intel) will simply get no CPU/GPU
+temperature — `SMCReader` returns nil for keys that don't exist on that
+hardware, never crashes or shows wrong data for it. `ProcessInfo.thermalState`
+(public API, `.nominal`/`.fair`/`.serious`/`.critical`) is shown regardless
+of chip generation as a zero-risk qualitative complement.
+
+**Why not `IOReport` for this?** Researched first (see §6 below) — on
+Apple Silicon, `IOReport`'s "Energy Model" channels give aggregate CPU/GPU
+**power** (Watts), not temperature. SMC was the right tool for °C; IOReport
+would have been the wrong one here too.
+
+**A real, genuinely tricky bug was found and fixed here — worth documenting
+in detail since it cost significant time and the symptoms were actively
+misleading:**
+
+Initial testing (standalone test harness, then direct binary execution)
+produced real, plausible temperatures immediately. But once deployed as
+the actual LaunchAgent-managed app, temperature was reliably `nil`. This
+looked exactly like a connection/permissions problem — added logging,
+confirmed the SMC connection opened successfully every time, no TCC/entitlement
+denials anywhere in the system log. Eventually added per-key logging and
+found the real cause: individual key reads were **succeeding** and
+returning a "flt " (float) data type correctly, but decoding to
+nonsensical values — denormalized near-zero garbage on some runs
+(`~1e-43`), wildly random huge/negative numbers on others. That
+run-to-run *inconsistency for identical code* was the tell: this wasn't a
+logic bug (which would be wrong the same way every time), it was
+**undefined behavior**. The `.flt` decode case used
+`[bytes...].withUnsafeBytes { $0.load(as: UInt32.self) }` — `load(as:)`
+requires the pointer be correctly aligned for the loaded type (4 bytes for
+`UInt32`), and a `[UInt8]` array's backing buffer has no such guarantee.
+Fixed by building the `UInt32` via manual bit-shifting instead (matching
+the style already used for every other data-type case here), which has no
+alignment requirement at all. Verified with 3 consecutive fresh
+LaunchAgent-managed launches after the fix, all producing correct,
+consistent, physically plausible readings (~43-49°C CPU, ~37-41°C GPU)
+immediately.
+
+**Lesson for anyone touching this file:** if temperature (or any SMC value)
+ever looks wrong again, check whether the *dataType* logged for that key is
+still `sp78`/`flt `/`fpe2`/etc. as expected before assuming the struct
+layout or key codes are wrong — an alignment or decode bug produces
+symptoms (nil, or wrong-looking numbers) that are easy to misattribute to
+connection/permission/timing issues, exactly as happened here.
+
+## 8. Alerts & notifications — `UserNotifications` (public)
 
 **Source file:** `AlertsManager.swift`, `PeripheralsMonitor.notify()`
 **API:** `UNUserNotificationCenter` — standard public framework. Requires
@@ -221,7 +291,7 @@ charging) are evaluated locally from the data above — no additional data
 source, just state-transition logic over what `BatteryMonitor` already
 tracks.
 
-## 8. Menu bar icon — SF Symbols (public)
+## 9. Menu bar icon — SF Symbols (public)
 
 **Source file:** `BatteryIcon.swift`
 Battery glyphs (`battery.0` … `battery.100`) are standard SF Symbols,

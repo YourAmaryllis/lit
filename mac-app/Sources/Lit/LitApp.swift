@@ -11,6 +11,7 @@ struct LitApp: App {
                 battery: appDelegate.battery,
                 peripherals: appDelegate.peripherals,
                 energy: appDelegate.energy,
+                temperature: appDelegate.temperature,
                 dashboardURL: appDelegate.dashboardServer.url
             )
         } label: {
@@ -49,12 +50,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let peripherals = PeripheralsMonitor()
     let appearance = AppearanceSettings()
     let energy = EnergyMonitor()
+    let temperature = SystemTemperatureMonitor()
     lazy var dashboardServer = DashboardServer(
         battery: battery,
         alerts: alerts,
         peripherals: peripherals,
         appearance: appearance,
-        energy: energy
+        energy: energy,
+        temperature: temperature
     )
 
     func applicationDidFinishLaunching(_ notification: Notification) {
