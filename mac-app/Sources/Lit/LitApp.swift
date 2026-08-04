@@ -7,7 +7,12 @@ struct LitApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(battery: appDelegate.battery, dashboardURL: appDelegate.dashboardServer.url)
+            MenuBarView(
+                battery: appDelegate.battery,
+                peripherals: appDelegate.peripherals,
+                energy: appDelegate.energy,
+                dashboardURL: appDelegate.dashboardServer.url
+            )
         } label: {
             MenuBarLabel(battery: appDelegate.battery, appearance: appDelegate.appearance)
         }

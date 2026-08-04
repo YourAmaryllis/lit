@@ -24,6 +24,7 @@ final class BatteryMonitor: ObservableObject {
     @Published var fullCapacityMah: Int?
     @Published var remainingCapacityMah: Int?
     @Published var temperatureCelsius: Double?
+    @Published var lastHealthUpdate: Date?
 
     // Electrical — refreshed on every fast tick.
     @Published var voltageVolts: Double?
@@ -78,9 +79,13 @@ final class BatteryMonitor: ObservableObject {
         refreshElectrical()
         if Date().timeIntervalSince(lastHealthRefresh) >= healthRefreshInterval {
             refreshHealthSnapshot()
-            lastHealthRefresh = Date()
         }
         onUpdate?(percentage, isPluggedIn, isCharging)
+    }
+
+    /// Bypasses the 2-minute throttle for an explicit "refresh now" request.
+    func refreshHealthNow() {
+        refreshHealthSnapshot()
     }
 
     private func refreshPowerSource() {
@@ -125,6 +130,8 @@ final class BatteryMonitor: ObservableObject {
                 self.temperatureCelsius = tempRaw / 100.0
             }
         }
+        lastHealthRefresh = Date()
+        lastHealthUpdate = lastHealthRefresh
     }
 
     private func withSmartBatteryService(_ body: (_ property: (String) -> Any?) -> Void) {

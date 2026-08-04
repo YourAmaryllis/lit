@@ -190,6 +190,10 @@
       <span>Full Capacity <span class="value" id="cap-full">—</span></span>
       <span>Design Capacity <span class="value" id="cap-design">—</span></span>
     </div>
+    <div class="empty" style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+      <span id="cap-updated">—</span>
+      <a href="#" id="cap-refresh" style="color:var(--accent); text-decoration:none;">Refresh now</a>
+    </div>
   </div>
 
   <div class="grid grid-2" style="margin-top:16px;">
@@ -233,6 +237,12 @@
     if (m == null || m <= 0 || m === 65535) return null;
     const h = Math.floor(m / 60), mm = m % 60;
     return (h > 0 ? h + 'h ' : '') + mm + 'm';
+  };
+  const fmtAgo = epochSeconds => {
+    if (epochSeconds == null) return 'Not yet updated';
+    const seconds = Math.max(0, Math.round(Date.now() / 1000 - epochSeconds));
+    if (seconds < 60) return 'Updated just now';
+    return `Updated ${Math.floor(seconds / 60)}m ago`;
   };
 
   async function refresh() {
@@ -315,6 +325,7 @@
       document.getElementById('cap-full-fill').style.width = fullPct + '%';
       document.getElementById('cap-remaining-fill').style.width = remPct + '%';
     }
+    document.getElementById('cap-updated').textContent = fmtAgo(data.lastHealthUpdate);
 
     // Devices
     const devicesEl = document.getElementById('devices');
@@ -369,6 +380,11 @@
     await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     refresh();
   }
+
+  document.getElementById('cap-refresh').addEventListener('click', e => {
+    e.preventDefault();
+    postJSON('/api/health/refresh', {});
+  });
 
   document.getElementById('threshold-add').addEventListener('click', () => {
     const input = document.getElementById('threshold-input');

@@ -1,9 +1,12 @@
 import Foundation
 import Network
 
-/// Serves the battery dashboard over plain HTTP on loopback only — same
-/// pattern local-admin-page tools like CloudMount use: the menu bar app runs a
-/// tiny local server, and "Open Dashboard" just opens it in your browser.
+/// Serves the full battery dashboard (stats + settings) over plain HTTP on
+/// loopback only — same pattern local-admin-page tools like CloudMount use.
+/// The menu bar dropdown shows the same stats natively for a quick glance;
+/// this is the same information with room to breathe, plus the two bits of
+/// config (alert thresholds, icon style) that don't belong crammed into a
+/// 300px popover.
 @MainActor
 final class DashboardServer {
     let port: UInt16 = 7091
@@ -101,6 +104,9 @@ final class DashboardServer {
                 appearance.iconStyle = style
             }
             response = .json(statusJSON())
+        case ("POST", "/api/health/refresh"):
+            battery.refreshHealthNow()
+            response = .json(statusJSON())
         default:
             response = .notFound
         }
@@ -137,6 +143,7 @@ final class DashboardServer {
                 "wattage": battery.batteryWattage,
                 "adapterWattage": battery.adapterWattage,
             ] as [String: Any?],
+            "lastHealthUpdate": battery.lastHealthUpdate.map { $0.timeIntervalSince1970 },
             "devices": peripherals.devices.map {
                 ["id": $0.id, "name": $0.name, "batteryPercent": $0.batteryPercent] as [String: Any]
             },
