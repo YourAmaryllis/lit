@@ -40,9 +40,32 @@ fi
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$CONTENTS/Info.plist"
 plutil -replace CFBundleVersion -string "$VERSION" "$CONTENTS/Info.plist"
 
-# Ad-hoc sign: LSUIElement / MenuBarExtra need a real bundle identity to
-# behave reliably. No Developer ID yet, so this is local-only (unsigned
-# for Gatekeeper purposes — see the release notes note about right-click Open).
-codesign --force --deep --sign - "$APP"
+# LSUIElement / MenuBarExtra need a real bundle identity to behave reliably,
+# so this always signs at least ad-hoc. Set CODESIGN_IDENTITY (e.g.
+# "Developer ID Application: Your Name (TEAMID)" — see `security
+# find-identity -v -p codesigning`) to sign for real distribution instead;
+# see the "Signing & notarization" section in the README for the full path
+# to notarized, Gatekeeper-clean builds.
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+  echo "Signing with: $CODESIGN_IDENTITY"
+
+  # Vendored adb/libimobiledevice binaries are nested Mach-O executables and
+  # dylibs, not just opaque resources — notarization inspects each one, so
+  # each needs its own hardened-runtime signature under the same identity
+  # (vendor-tools.sh only ad-hoc-signs them, which fails notarization).
+  if [[ -d "$RES/vendor" ]]; then
+    find "$RES/vendor" -type f \( -perm -111 -o -name '*.dylib' \) -exec \
+      codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" {} \;
+  fi
+
+  # Signs the bundle (including Contents/MacOS/Lit) in one shot — no --deep,
+  # since the vendor binaries above are already signed individually and
+  # --deep would try (and needn't) re-sign them itself.
+  codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$APP"
+  codesign --verify --deep --strict --verbose=2 "$APP"
+else
+  echo "No CODESIGN_IDENTITY set — ad-hoc signing only (local dev / unsigned distribution)."
+  codesign --force --deep --sign - "$APP"
+fi
 
 echo "Built: $APP (v${VERSION})"

@@ -42,8 +42,9 @@ real hardware.
 Download the latest DMG from [Releases](https://github.com/YourAmaryllis/lit/releases),
 open it, and drag **lit** into Applications.
 
-Builds are unsigned (no Apple Developer ID) — right-click → Open on first
-launch if Gatekeeper warns.
+Check the release notes for that version: if it's signed & notarized with a
+Developer ID certificate, Gatekeeper opens it with no warning; if not,
+right-click → Open on first launch.
 
 iPhone/iPad and Android device support ship with the app —
 [`libimobiledevice`](https://libimobiledevice.org) and `adb` are bundled, no
@@ -84,7 +85,8 @@ run `./Scripts/vendor-tools.sh`.
 - `mac-app/` — the Swift Package (SwiftUI `MenuBarExtra`) menu bar app
 - `site/` — Next.js marketing site
 - `scripts/` — release build scripts (`build-app.sh` → universal, versioned
-  `dist/Lit.app`; `build-dmg.sh` → `dist/lit-<version>.dmg`)
+  `dist/Lit.app`; `build-dmg.sh` → `dist/lit-<version>.dmg`;
+  `notarize-dmg.sh` → notarizes + staples it)
 - `.github/workflows/release.yml` — tag-triggered CI release
 
 ## Architecture
@@ -112,6 +114,43 @@ git tag v0.0.1 && git push origin v0.0.1
 This triggers `.github/workflows/release.yml`, which builds a universal DMG
 and publishes a GitHub Release. Can also be run manually via
 Actions → Release → Run workflow.
+
+## Signing & notarization
+
+CI signs and notarizes the release DMG automatically once these repo
+secrets are set (Settings → Secrets and variables → Actions); with none of
+them set, it falls back to an ad-hoc-signed, unsigned build exactly as
+before.
+
+1. **Get a Developer ID Application certificate** — Xcode → Settings →
+   Accounts → your team → Manage Certificates → **+** → Developer ID
+   Application (or via Keychain Access → Certificate Assistant → Request a
+   Certificate from a CA, uploaded at
+   [developer.apple.com/account/resources/certificates](https://developer.apple.com/account/resources/certificates)).
+2. **Export it as a `.p12`** from Keychain Access (right-click the cert →
+   Export → set a password), then base64-encode it:
+   `base64 -i DeveloperID.p12 | pbcopy`
+   - `MACOS_CERTIFICATE_P12` — the base64 output above
+   - `MACOS_CERTIFICATE_PASSWORD` — the password you set on export
+3. **Create an App Store Connect API key** for notarization —
+   [appstoreconnect.apple.com/access/api](https://appstoreconnect.apple.com/access/api),
+   role "Developer" is enough:
+   - `APPLE_API_KEY_ID` — the key ID shown in the portal
+   - `APPLE_API_ISSUER` — the issuer ID shown in the portal
+   - `APPLE_API_KEY_P8` — base64 of the downloaded `.p8` file:
+     `base64 -i AuthKey_XXXX.p8 | pbcopy`
+
+To test signing/notarization locally instead of through CI:
+```bash
+CODESIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./scripts/build-dmg.sh
+xcrun notarytool store-credentials lit-notary \
+  --apple-id you@example.com --team-id TEAMID --password APP_SPECIFIC_PASSWORD
+NOTARY_KEYCHAIN_PROFILE=lit-notary ./scripts/notarize-dmg.sh dist/lit-*.dmg
+```
+(`security find-identity -v -p codesigning` lists the exact identity
+string; the app-specific password is generated at
+[appleid.apple.com](https://appleid.apple.com), not your main Apple ID
+password.)
 
 ## Roadmap
 
