@@ -50,6 +50,14 @@ jobs:
     name: macOS DMG
     needs: resolve-version
     runs-on: macos-14
+    env:
+      # Job-level env so `if:` conditions below can check `env.*` — step
+      # `if:` conditions can't reference `secrets.*` directly.
+      MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     outputs:
       signed: ${{ steps.sign-status.outputs.signed }}
     steps:
@@ -62,10 +70,7 @@ jobs:
       # falls back to ad-hoc signing, same as before — see the "Signing &
       # notarization" section in the README for how to set this up.
       - name: Import Developer ID certificate
-        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
-        env:
-          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        if: ${{ env.MACOS_CERTIFICATE_P12 != '' }}
         run: |
           set -euo pipefail
           KEYCHAIN_PASSWORD="$(uuidgen)"
@@ -93,11 +98,7 @@ jobs:
           ./scripts/build-dmg.sh
 
       - name: Notarize DMG
-        if: ${{ secrets.MACOS_CERTIFICATE_P12 != '' }}
-        env:
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        if: ${{ env.MACOS_CERTIFICATE_P12 != '' }}
         run: ./scripts/notarize-dmg.sh "$(cat dist/dmg-path.txt)"
 
       - name: Record signed status
