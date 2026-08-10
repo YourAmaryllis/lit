@@ -60,6 +60,7 @@ jobs:
       APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
     outputs:
       signed: ${{ steps.sign-status.outputs.signed }}
+      notarized: ${{ steps.sign-status.outputs.notarized }}
     steps:
       - uses: actions/checkout@v4
       - name: Set VERSION
@@ -99,7 +100,10 @@ jobs:
 
       - name: Notarize DMG
         if: ${{ env.MACOS_CERTIFICATE_P12 != '' }}
-        run: ./scripts/notarize-dmg.sh "$(cat dist/dmg-path.txt)"
+        run: |
+          if ./scripts/notarize-dmg.sh "$(cat dist/dmg-path.txt)" | tee /tmp/notarize.log; then
+            grep -q "^Notarized & stapled:" /tmp/notarize.log && echo "NOTARIZED=true" >> "$GITHUB_ENV"
+          fi
 
       - name: Record signed status
         id: sign-status
@@ -108,6 +112,11 @@ jobs:
             echo "signed=true" >> "$GITHUB_OUTPUT"
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ "${NOTARIZED:-}" == "true" ]]; then
+            echo "notarized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "notarized=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Clean up keychain
@@ -153,7 +162,7 @@ jobs:
 
             ### Install
             1. Open the DMG -> drag **lit** to Applications
-            2. ${{ needs.macos-dmg.outputs.signed == 'true' && 'Signed and notarized with a Developer ID certificate — Gatekeeper should open it with no warning' || 'Right-click -> **Open** if Gatekeeper warns (unsigned — no Apple Developer ID yet)' }}
+            2. ${{ needs.macos-dmg.outputs.notarized == 'true' && 'Signed and notarized with a Developer ID certificate — Gatekeeper should open it with no warning' || (needs.macos-dmg.outputs.signed == 'true' && 'Signed with a Developer ID certificate but not yet notarized — right-click -> **Open** if Gatekeeper still warns' || 'Right-click -> **Open** if Gatekeeper warns (unsigned — no Apple Developer ID yet)') }}
             3. lit runs from the **menu bar** — no window opens; look for
                the battery icon. Click it for a quick glance, or the
                "Settings" row to open the full dashboard in your browser
@@ -163,7 +172,7 @@ jobs:
             ### Notes
             - Requires macOS 14 Sonoma or later
             - Universal binary (Apple Silicon & Intel)
-            - ${{ needs.macos-dmg.outputs.signed == 'true' && 'Signed & notarized' || 'Build is **unsigned**' }} —
+            - ${{ needs.macos-dmg.outputs.notarized == 'true' && 'Signed & notarized' || (needs.macos-dmg.outputs.signed == 'true' && 'Signed with a Developer ID certificate (not notarized yet)' || 'Build is **unsigned**') }} —
               everything runs locally, nothing phones home; read the
               source if you want to verify that yourself before trusting
               it with system access
