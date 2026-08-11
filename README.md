@@ -6,6 +6,8 @@ plus a few ideas of its own.
 
 No account, no subscription, no telemetry. Everything runs locally.
 
+**[youramaryllis.github.io/lit](https://youramaryllis.github.io/lit/)**
+
 ![lit menu bar dropdown showing battery, power, capacity, temperature, and app energy usage](assets/dashboard.png)
 
 ## Features
@@ -88,6 +90,7 @@ run `./Scripts/vendor-tools.sh`.
   `dist/Lit.app`; `build-dmg.sh` → `dist/lit-<version>.dmg`;
   `notarize-dmg.sh` → notarizes + staples it)
 - `.github/workflows/release.yml` — tag-triggered CI release
+- `.github/workflows/pages.yml` — deploys `site/` to GitHub Pages on push
 
 ## Architecture
 
